@@ -11,11 +11,14 @@ from seq2seq.batch_utils import time_major_batch
 
 class DynamicSeq2Seq(object):
     def __init__(self,
+                 vocab_size, embedding_size,
                  encoder_args, decoder_args,
-                 encoder_optimization_args, decoder_optimization_args):
+                 embeddings_optimization_args=None,
+                 encoder_optimization_args=None,
+                 decoder_optimization_args=None):
         self.embeddings = Embeddings(
-            encoder_args["vocab_size"],
-            encoder_args["embedding_size"],
+            vocab_size,
+            embedding_size,
             scope="embeddings")
 
         self.encoder = DynamicRnnEncoder(
@@ -31,4 +34,4 @@ class DynamicSeq2Seq(object):
 
         build_optimization(self.encoder, encoder_optimization_args, self.decoder.loss)
         build_optimization(self.decoder, decoder_optimization_args)
-        build_optimization(self.embeddings, decoder_optimization_args, self.decoder.loss)
+        build_optimization(self.embeddings, embeddings_optimization_args, self.decoder.loss)

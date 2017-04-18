@@ -6,7 +6,7 @@ from seq2seq.embeddings import create_embedding_matrix
 
 class DynamicRnnDecoder(object):
     def __init__(self, cell, encoder_state, encoder_outputs, encoder_inputs_length,
-                 attention=True,
+                 attention=False,
                  embedding_matrix=None, vocab_size=None, embedding_size=None,
                  special=None):
         assert embedding_matrix is not None \
@@ -14,6 +14,8 @@ class DynamicRnnDecoder(object):
         # @TODO: should work without all encoder stuff
         if embedding_matrix is not None:
             # @TODO: add vocab_size and embed_size unpack
+            self.vocab_size, self.embedding_size = embedding_matrix.get_shape().as_list()
+            # self.vocab_size, self.embedding_size = tf.unstack(embedding_matrix.get_shape())
             self.embedding_matrix = embedding_matrix
         else:
             self.vocab_size = vocab_size
@@ -29,12 +31,12 @@ class DynamicRnnDecoder(object):
         self.encoder_outputs = encoder_outputs
         self.encoder_inputs_length = encoder_inputs_length
         self.attention = attention
-        self.special = (special or {})
+        self.special = special or {}
         self.PAD = self.special.get("PAD", 0)
         self.EOS = self.special.get("EOS", 1)
 
-        self.scope = special.get("scope", "DynamicRnnDecoder")
-        self.reuse_scope = special.get("reuse_scope", False)
+        self.scope = self.special.get("scope", "DynamicRnnDecoder")
+        self.reuse_scope = self.special.get("reuse_scope", False)
         with tf.variable_scope(self.scope, self.reuse_scope):
             self._build_graph()
             self._build_loss()

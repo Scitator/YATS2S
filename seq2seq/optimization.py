@@ -23,7 +23,7 @@ def build_optimization(model, optimization_params=None, loss=None):
         lr_decay,
         staircase=True)
 
-    model.loss = model.loss or loss
+    model.loss = model.loss if model.loss is not None else loss
     model.optimizer = tf.train.AdamOptimizer(lr)
 
     model.train_op = update_varlist(

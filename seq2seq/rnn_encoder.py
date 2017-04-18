@@ -4,13 +4,15 @@ from seq2seq.embeddings import create_embedding_matrix
 
 
 class DynamicRnnEncoder(object):
-    def __init__(self, cell, bidirectional=True,
+    def __init__(self, cell, bidirectional=False,
                  embedding_matrix=None, vocab_size=None, embedding_size=None,
                  special=None):
         assert embedding_matrix is not None \
                or (vocab_size is not None and embedding_size is not None)
         if embedding_matrix is not None:
             # @TODO: add vocab_size and embe_size unpack
+            self.vocab_size, self.embedding_size = embedding_matrix.get_shape().as_list()
+            # self.vocab_size, self.embedding_size = tf.unstack(embedding_matrix.get_shape())
             self.embedding_matrix = embedding_matrix
         else:
             self.vocab_size = vocab_size
@@ -23,12 +25,12 @@ class DynamicRnnEncoder(object):
         self.train_op = None
         self.cell = cell
         self.bidirectional = bidirectional
-        self.special = (special or {})
+        self.special = special or {}
         self.PAD = self.special.get("PAD", 0)
         self.EOS = self.special.get("EOS", 1)
 
-        self.scope = special.get("scope", "DynamicRnnEncoder")
-        self.reuse_scope = special.get("reuse_scope", False)
+        self.scope = self.special.get("scope", "DynamicRnnEncoder")
+        self.reuse_scope = self.special.get("reuse_scope", False)
         with tf.variable_scope(self.scope, self.reuse_scope):
             self._build_graph()
 
@@ -66,7 +68,8 @@ class DynamicRnnEncoder(object):
                     (encoder_fw_outputs, encoder_bw_outputs), 2,
                     name='bidirectional_output_concat')
 
-                if isinstance(encoder_fw_state, tuple):  # for MultiRNNCell:
+                if not isinstance(encoder_fw_state, rnn.LSTMStateTuple) and \
+                        isinstance(encoder_fw_state, tuple):  # for MultiRNNCell:
                     encoder_fw_state = encoder_fw_state[-1]
                     encoder_bw_state = encoder_bw_state[-1]
 
@@ -92,6 +95,7 @@ class DynamicRnnEncoder(object):
 
                 self.outputs = outputs
 
-                if isinstance(state, tuple):  # for MultiRNNCell:
+                if not isinstance(state, rnn.LSTMStateTuple) and \
+                        isinstance(state, tuple):  # for MultiRNNCell:
                     state = state[-1]
                 self.state = state

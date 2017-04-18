@@ -17,8 +17,7 @@ def train_seq2seq(sess, model, train_gen, val_gen=None, run_params=None):
     val_params = None
     if val_gen is not None:
         val_params = {
-            "run_keys": [
-                model.decoder.loss],
+            "run_keys": [model.decoder.loss],
             "result_keys": ["val_unreg_loss"],
             "feed_keys": [model.encoder.inputs, model.encoder.inputs_length,
                           model.decoder.targets, model.decoder.targets_length],
