@@ -60,11 +60,7 @@ class DynamicRnnDecoder(object):
             name='decoder_inputs_length')
         self.global_step = tf.Variable(0, name='global_step', trainable=False)
 
-        with tf.variable_scope("embedding") as scope:
-            self.inputs_embedded = tf.nn.embedding_lookup(
-                self.embedding_matrix, self.targets)
-
-        with tf.name_scope('DecoderTrainFeeds'):
+        with tf.name_scope('DecoderTrainFeed'):
             sequence_size, batch_size = tf.unstack(tf.shape(self.targets))
 
             EOS_SLICE = tf.ones([1, batch_size], dtype=tf.int32) * self.EOS
@@ -92,6 +88,10 @@ class DynamicRnnDecoder(object):
                 batch_size,
                 tf.reduce_max(self.train_length)],
                 dtype=tf.float32, name="loss_weights")
+
+        with tf.variable_scope("embedding") as scope:
+            self.inputs_embedded = tf.nn.embedding_lookup(
+                self.embedding_matrix, self.train_inputs)
 
         with tf.variable_scope("Decoder") as scope:
 

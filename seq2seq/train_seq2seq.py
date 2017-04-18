@@ -12,7 +12,7 @@ def train_seq2seq(sess, model, train_gen, val_gen=None, run_params=None):
                       model.decoder.targets, model.decoder.targets_length],
         "n_batch": 100,
     }
-    train_gen = time_major_generator(train_gen)
+    # train_gen = time_major_generator(train_gen)
 
     val_params = None
     if val_gen is not None:
@@ -23,7 +23,7 @@ def train_seq2seq(sess, model, train_gen, val_gen=None, run_params=None):
                           model.decoder.targets, model.decoder.targets_length],
             "n_batch": 100,
         }
-        val_gen = time_major_generator(val_gen)
+        # val_gen = time_major_generator(val_gen)
 
     history = run_train(
         sess,

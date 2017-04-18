@@ -24,7 +24,7 @@ def run_generator(sess, run_keys, result_keys, feed_keys, data_gen, n_batch=np.i
             run_keys,
             feed_dict=dict(zip(feed_keys, feed_values)))
 
-        for i, key in result_keys:
+        for i, key in enumerate(result_keys):
             history[key].append(run_result[i])
 
         if i_batch >= n_batch:
