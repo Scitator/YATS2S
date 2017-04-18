@@ -2,18 +2,8 @@ import numpy as np
 import itertools
 import collections
 from tqdm import trange
-
-
-def iterate_minibatches(inputs, batch_size, shuffle=True):
-    if shuffle:
-        indices = np.arange(len(inputs))
-        np.random.shuffle(indices)
-    for start_idx in range(0, len(inputs) - batch_size + 1, batch_size):
-        if shuffle:
-            excerpt = indices[start_idx:start_idx + batch_size]
-        else:
-            excerpt = slice(start_idx, start_idx + batch_size)
-        yield inputs[excerpt]
+from seq2seq.os_utils import create_if_need, save_history
+from seq2seq.plotter import plot_all_metrics
 
 
 def run_generator(sess, run_keys, result_keys, feed_keys, data_gen, n_batch=np.inf):
@@ -27,7 +17,7 @@ def run_generator(sess, run_keys, result_keys, feed_keys, data_gen, n_batch=np.i
         for i, key in enumerate(result_keys):
             history[key].append(run_result[i])
 
-        if i_batch >= n_batch:
+        if i_batch+1 >= n_batch:
             break
     return history
 
@@ -36,6 +26,10 @@ def run_train(sess, train_gen, train_params, val_gen=None, val_params=None, run_
     run_params = run_params or {}
 
     n_epochs = run_params.get("n_epochs", 100)
+    log_dir = run_params.get("log_dir", "./logs")
+    plotter_dir = run_params.get("plotter_dir", "./logs/plotter")
+    create_if_need(log_dir)
+
     history = collections.defaultdict(list)
 
     tr = trange(
@@ -58,5 +52,8 @@ def run_train(sess, train_gen, train_params, val_gen=None, val_params=None, run_
         desc = "\t".join(
             ["{} = {:.3f}".format(key, value[-1]) for key, value in history.items()])
         tr.set_description(desc)
+
+    save_history(history, log_dir)
+    plot_all_metrics(history, save_dir=plotter_dir)
 
     return history
