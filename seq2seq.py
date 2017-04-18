@@ -318,7 +318,7 @@ class DynamicRnnDecoder(object):
                     end_of_sequence_id=self.EOS,
                     maximum_length=tf.reduce_max(self.encoder_inputs_length) + 3,
                     num_decoder_symbols=self.vocab_size,
-                )
+)
 
             (self.train_outputs,
              self.train_state,
