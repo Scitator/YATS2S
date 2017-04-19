@@ -89,5 +89,7 @@ ENV/
 .ropeproject
 
 .idea
+.code
 logs*
 tmp*
+*.ipynb
