@@ -93,3 +93,4 @@ ENV/
 logs*
 tmp*
 *.ipynb
+data/*
