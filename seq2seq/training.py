@@ -3,6 +3,7 @@ import itertools
 import collections
 import os
 from tqdm import trange
+import tensorflow as tf
 from seq2seq.os_utils import create_if_need, save_history
 from seq2seq.plotter import plot_all_metrics
 
@@ -29,9 +30,12 @@ def run_train(sess, train_gen, train_params, val_gen=None, val_params=None, run_
     n_epochs = run_params.get("n_epochs", 100)
     log_dir = run_params.get("log_dir", "./logs")
     plotter_dir = run_params.get("plotter_dir", "plotter")
+    model_dir = run_params.get("model_dir", "model")
+    checkpoint_every = run_params.get("checkpoint_every", 10)
     create_if_need(log_dir)
 
     history = collections.defaultdict(list)
+    saver = tf.Saver()
 
     tr = trange(
         n_epochs,
@@ -39,7 +43,7 @@ def run_train(sess, train_gen, train_params, val_gen=None, val_params=None, run_
         leave=True)
 
     for i_epoch in tr:
-        if train_params.get("n_batch", -1) > 0:
+        if train_params.get("n_batch", -1) < 0:
             train_gen, train_gen_copy = itertools.tee(train_gen, 2)
         else:
             train_gen_copy = train_gen
@@ -48,7 +52,7 @@ def run_train(sess, train_gen, train_params, val_gen=None, val_params=None, run_
             history[metric].append(np.mean(train_epoch_history[metric]))
 
         if val_gen is not None and val_params is not None:
-            if val_params.get("n_batch", -1) > 0:
+            if val_params.get("n_batch", -1) < 0:
                 val_gen, val_gen_copy = itertools.tee(val_gen, 2)
             else:
                 val_gen_copy = train_gen
@@ -56,10 +60,24 @@ def run_train(sess, train_gen, train_params, val_gen=None, val_params=None, run_
             for metric in val_epoch_history:
                 history[metric].append(np.mean(val_epoch_history[metric]))
 
+        if (i_epoch + 1) % checkpoint_every == 0:
+            checkpoint_dir = os.path.join(log_dir, model_dir, str(i_epoch))
+            create_if_need(checkpoint_dir)
+            try:
+                saver.save(sess, checkpoint_dir, global_step=model_dir.global_step)
+            except:
+                saver.save(sess, checkpoint_dir)
+
         desc = "\t".join(
             ["{} = {:.3f}".format(key, value[-1]) for key, value in history.items()])
         tr.set_description(desc)
 
+    model_dir = os.path.join(log_dir, model_dir)
+    create_if_need(model_dir)
+    try:
+        saver.save(sess, model_dir, global_step=model_dir.global_step)
+    except:
+        saver.save(sess, model_dir)
     save_history(history, log_dir)
     plotter_dir = os.path.join(log_dir, plotter_dir)
     plot_all_metrics(history, save_dir=plotter_dir)
