@@ -82,10 +82,6 @@ def parse_args():
         action='store_true',
         default=False)
     parser.add_argument(
-        '--gpu_option',
-        type=float,
-        default=0.45)
-    parser.add_argument(
         '--n_epochs',
         type=int,
         default=1000)
