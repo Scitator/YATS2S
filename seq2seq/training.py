@@ -35,7 +35,7 @@ def run_train(sess, train_gen, train_params, val_gen=None, val_params=None, run_
     create_if_need(log_dir)
 
     history = collections.defaultdict(list)
-    saver = tf.Saver()
+    saver = tf.train.Saver()
 
     tr = trange(
         n_epochs,
