@@ -158,3 +158,6 @@ def main():
             train_iter,
             val_iter,
             run_params)
+
+if __name__ == '__main__':
+    main()
