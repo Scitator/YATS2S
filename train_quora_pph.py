@@ -90,6 +90,20 @@ def parse_args():
         type=str,
         default="./logs")
 
+    parser.add_argument(
+        '--lr_decay_on',
+        type=str,
+        default='epoch',
+        choices=['epoch', 'batch'])
+    parser.add_argument(
+        '--lr_decay_steps',
+        type=int,
+        default=1)
+    parser.add_argument(
+        '--lr_decay_koef',
+        type=float,
+        default=0.99)
+
     args, _ = parser.parse_known_args()
     return args
 
@@ -139,8 +153,20 @@ def main():
         "attention": args.attention,
     }
 
+    optimization_args = {
+        "decay_steps": args.lr_decay_steps,
+        "lr_decay": args.lr_decay_koef
+    }
+
+    if args.lr_decay_on == "epoch":
+        optimization_args["decay_steps"] *= len(train_data)
+
     model = DynamicSeq2Seq(
-        vocab_size, emb_size, encoder_args, decoder_args)
+        vocab_size, emb_size,
+        encoder_args, decoder_args,
+        optimization_args,
+        optimization_args,
+        optimization_args)
 
     train_iter = seq2seq_iter(train_data, batch_size)
     val_iter = seq2seq_iter(val_data, batch_size)
