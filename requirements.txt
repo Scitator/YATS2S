@@ -1,0 +1,10 @@
+bz2file
+numpy
+scipy
+tqdm
+matplotlib
+seaborn
+jupyter
+joblib
+scikit-learn
+tensorflow-gpu==1.0.0

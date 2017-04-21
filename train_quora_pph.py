@@ -155,7 +155,6 @@ def main():
 
     with tf.Session(config=tf.ConfigProto(gpu_options=gpu_options)) as sess:
         sess.run(tf.global_variables_initializer())
-        import pdb; pdb.set_trace()
         history = train_seq2seq(
             sess, model,
             train_iter,
