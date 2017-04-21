@@ -108,6 +108,11 @@ def main():
     with open("data/id2token.json") as fout:
         id2token = json.load(fout)
 
+    unk_id = 2
+    unk = " "
+    encode = lambda line: list(map(lambda t: token2id.get(t, unk_id), line))
+    decode = lambda line: list(map(lambda i: id2token.get(i, unk), line))
+
     indices = np.arange(len(pph1_enc))
     train_ids, val_ids = train_test_split(indices, test_size=0.2, random_state=42)
 
