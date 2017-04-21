@@ -107,11 +107,12 @@ def main():
         token2id = json.load(fout)
     with open("data/id2token.json") as fout:
         id2token = json.load(fout)
+        id2token = {int(key):value for key, value in id2token.items()}
 
     unk_id = 2
     unk = " "
     encode = lambda line: list(map(lambda t: token2id.get(t, unk_id), line))
-    decode = lambda line: list(map(lambda i: id2token.get(i, unk), line))
+    decode = lambda line: "".join(list(map(lambda i: id2token.get(i, unk), line)))
 
     indices = np.arange(len(pph1_enc))
     train_ids, val_ids = train_test_split(indices, test_size=0.2, random_state=42)
@@ -154,6 +155,7 @@ def main():
 
     with tf.Session(config=tf.ConfigProto(gpu_options=gpu_options)) as sess:
         sess.run(tf.global_variables_initializer())
+        import pdb; pdb.set_trace()
         history = train_seq2seq(
             sess, model,
             train_iter,
