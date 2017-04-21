@@ -159,7 +159,7 @@ def main():
     }
 
     if args.lr_decay_on == "epoch":
-        optimization_args["decay_steps"] *= len(train_data)
+        optimization_args["decay_steps"] *= len(train_data) / batch_size
 
     model = DynamicSeq2Seq(
         vocab_size, emb_size,
