@@ -40,7 +40,7 @@ def train_seq2seq(sess, model, train_gen, val_gen=None, run_params=None):
     return history
 
 
-def seq2seq_iter(data, batch_size):
+def seq2seq_iter(data, batch_size, double=False):
     indices = np.arange(len(data))
     for batch in iterate_minibatches(indices, batch_size):
         batch = [data[i] for i in batch]
@@ -48,6 +48,8 @@ def seq2seq_iter(data, batch_size):
         seq, seq_len = time_major_batch(seq)
         target, target_len = time_major_batch(target)
         yield seq, seq_len, target, target_len
+        if double:
+            yield target, target_len, seq, seq_len
 
 
 def parse_args():
@@ -121,7 +123,7 @@ def main():
         token2id = json.load(fout)
     with open("data/id2token.json") as fout:
         id2token = json.load(fout)
-        id2token = {int(key):value for key, value in id2token.items()}
+        id2token = {int(key): value for key, value in id2token.items()}
 
     unk_id = 2
     unk = " "
@@ -168,8 +170,8 @@ def main():
         optimization_args,
         optimization_args)
 
-    train_iter = seq2seq_iter(train_data, batch_size)
-    val_iter = seq2seq_iter(val_data, batch_size)
+    train_iter = seq2seq_iter(train_data, batch_size, double=True)
+    val_iter = seq2seq_iter(val_data, batch_size, double=True)
 
     gpu_option = args.gpu_option
     gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=gpu_option)
@@ -186,6 +188,7 @@ def main():
             train_iter,
             val_iter,
             run_params)
+
 
 if __name__ == '__main__':
     main()

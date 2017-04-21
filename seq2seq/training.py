@@ -68,6 +68,7 @@ def run_train(sess, train_gen, train_params, val_gen=None, val_params=None, run_
                 sess, saver,
                 save_dir=checkpoint_dir,
                 model_global_step=model_global_step)
+            save_history(history, checkpoint_dir)
 
         desc = "\t".join(
             ["{} = {:.3f}".format(key, value[-1]) for key, value in history.items()])
