@@ -7,9 +7,10 @@ import argparse
 from tensorflow.contrib import layers
 from tensorflow.contrib import rnn
 from tensorflow.contrib import seq2seq
+from rstools.utils.batch_utils import iterate_minibatches
+from rstools.tf.training import run_train
 from seq2seq.rnn_seq2seq import DynamicSeq2Seq
-from seq2seq.batch_utils import time_major_batch, iterate_minibatches
-from seq2seq.training import run_train
+from seq2seq.batch_utils import time_major_batch
 
 
 def train_seq2seq(sess, model, train_gen, val_gen=None, run_params=None):

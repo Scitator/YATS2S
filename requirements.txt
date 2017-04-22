@@ -8,3 +8,4 @@ jupyter
 joblib
 scikit-learn
 tensorflow-gpu==1.0.0
+git+https://github.com/Scitator/rstools.git@master
