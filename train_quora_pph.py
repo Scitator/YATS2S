@@ -107,6 +107,11 @@ def parse_args():
         type=float,
         default=0.99)
 
+    parser.add_argument(
+        '--double_iter',
+        action='store_true',
+        default=False)
+
     args, _ = parser.parse_known_args()
     return args
 
@@ -171,8 +176,8 @@ def main():
         optimization_args,
         optimization_args)
 
-    train_iter = seq2seq_iter(train_data, batch_size, double=True)
-    val_iter = seq2seq_iter(val_data, batch_size, double=True)
+    train_iter = seq2seq_iter(train_data, batch_size, double=args.double_iter)
+    val_iter = seq2seq_iter(val_data, batch_size, double=args.double_iter)
 
     gpu_option = args.gpu_option
     gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=gpu_option)
