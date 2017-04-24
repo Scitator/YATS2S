@@ -11,11 +11,9 @@ class DynamicRnnDecoder(object):
                  special=None):
         assert embedding_matrix is not None \
                or (vocab_size is not None and embedding_size is not None)
-        # @TODO: should work without all encoder stuff
+        # @TODO: should work without all encoder stuff ?
         if embedding_matrix is not None:
-            # @TODO: add vocab_size and embed_size unpack
             self.vocab_size, self.embedding_size = embedding_matrix.get_shape().as_list()
-            # self.vocab_size, self.embedding_size = tf.unstack(embedding_matrix.get_shape())
             self.embedding_matrix = embedding_matrix
         else:
             self.vocab_size = vocab_size
@@ -28,9 +26,11 @@ class DynamicRnnDecoder(object):
         self.train_op = None
         self.cell = cell
         self.encoder_state = encoder_state
+        # @TODO: should be optimal
         self.encoder_outputs = encoder_outputs
         self.encoder_inputs_length = encoder_inputs_length
         self.attention = attention
+
         self.special = special or {}
         self.PAD = self.special.get("PAD", 0)
         self.EOS = self.special.get("EOS", 1)

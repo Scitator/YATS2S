@@ -10,9 +10,7 @@ class DynamicRnnEncoder(object):
         assert embedding_matrix is not None \
                or (vocab_size is not None and embedding_size is not None)
         if embedding_matrix is not None:
-            # @TODO: add vocab_size and embe_size unpack
             self.vocab_size, self.embedding_size = embedding_matrix.get_shape().as_list()
-            # self.vocab_size, self.embedding_size = tf.unstack(embedding_matrix.get_shape())
             self.embedding_matrix = embedding_matrix
         else:
             self.vocab_size = vocab_size
@@ -68,6 +66,7 @@ class DynamicRnnEncoder(object):
                     (encoder_fw_outputs, encoder_bw_outputs), 2,
                     name='bidirectional_output_concat')
 
+                # @TODO: need to check correctness
                 if not isinstance(encoder_fw_state, rnn.LSTMStateTuple) and \
                         isinstance(encoder_fw_state, tuple):  # for MultiRNNCell:
                     encoder_fw_state = encoder_fw_state[-1]
