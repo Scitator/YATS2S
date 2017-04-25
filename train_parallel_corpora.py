@@ -57,6 +57,32 @@ def parse_args():
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
+        '--from_corpora_path',
+        type=str,
+        default='data/quora/pph1_enc.pkl')
+    parser.add_argument(
+        '--to_corpora_path',
+        type=str,
+        default='data/quora/pph2_enc.pkl')
+    parser.add_argument(
+        '--vocab_path',
+        type=str,
+        default='data/quora/pph_vocab.txt')
+    parser.add_argument(
+        '--token2id_path',
+        type=str,
+        default='data/quora/token2id.json')
+    parser.add_argument(
+        '--id2token_path',
+        type=str,
+        default='data/quora/id2token.json')
+
+    parser.add_argument(
+        '--double_iter',
+        action='store_true',
+        default=False)
+
+    parser.add_argument(
         '--gpu_option',
         type=float,
         default=0.45)
@@ -107,11 +133,6 @@ def parse_args():
         type=float,
         default=0.99)
 
-    parser.add_argument(
-        '--double_iter',
-        action='store_true',
-        default=False)
-
     args, _ = parser.parse_known_args()
     return args
 
@@ -119,15 +140,15 @@ def parse_args():
 def main():
     args = parse_args()
 
-    with open("data/pph1_enc.pkl", "rb") as fout:
+    with open(args.from_corpora_path, "rb") as fout:
         pph1_enc = pickle.load(fout)
-    with open("data/pph2_enc.pkl", "rb") as fout:
+    with open(args.to_corpora_path, "rb") as fout:
         pph2_enc = pickle.load(fout)
-    with open("data/pph_vocab.txt") as fin:
+    with open(args.vocab_path) as fin:
         vocab = fin.readlines()
-    with open("data/token2id.json") as fout:
+    with open(args.token2id_path) as fout:
         token2id = json.load(fout)
-    with open("data/id2token.json") as fout:
+    with open(args.id2token_path) as fout:
         id2token = json.load(fout)
         id2token = {int(key): value for key, value in id2token.items()}
 
