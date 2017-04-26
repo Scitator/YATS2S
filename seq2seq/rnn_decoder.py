@@ -53,14 +53,14 @@ class DynamicRnnDecoder(object):
         self.targets = tf.placeholder(
             shape=(None, None),
             dtype=tf.int32,
-            name='decoder_inputs')
+            name="decoder_inputs")
         self.targets_length = tf.placeholder(
             shape=(None,),
             dtype=tf.int32,
-            name='decoder_inputs_length')
-        self.global_step = tf.Variable(0, name='global_step', trainable=False)
+            name="decoder_inputs_length")
+        self.global_step = tf.Variable(0, name="global_step", trainable=False)
 
-        with tf.name_scope('DecoderTrainFeed'):
+        with tf.name_scope("DecoderTrainFeed"):
             sequence_size, batch_size = tf.unstack(tf.shape(self.targets))
 
             EOS_SLICE = tf.ones([1, batch_size], dtype=tf.int32) * self.EOS
@@ -128,7 +128,7 @@ class DynamicRnnDecoder(object):
                     attention_values=attention_values,
                     attention_score_fn=attention_score_fn,
                     attention_construct_fn=attention_construct_fn,
-                    name='decoder_attention')
+                    name="decoder_attention")
 
                 inference_fn = seq2seq.attention_decoder_fn_inference(
                     output_fn=logits_fn,
@@ -156,7 +156,10 @@ class DynamicRnnDecoder(object):
             self.train_logits = logits_fn(self.train_outputs)
             self.train_prediction = tf.argmax(
                 self.train_logits, axis=-1,
-                name='train_prediction')
+                name="train_prediction")
+            self.train_prediction_probabilities = tf.nn.softmax(
+                self.train_logits, dim=-1,
+                name="train_prediction_probabilities")
 
             scope.reuse_variables()
 
@@ -170,7 +173,10 @@ class DynamicRnnDecoder(object):
 
             self.inference_prediction = tf.argmax(
                 self.inference_logits, axis=-1,
-                name='inference_prediction')
+                name="inference_prediction")
+            self.inference_prediction_probabilities = tf.nn.softmax(
+                self.train_logits, dim=-1,
+                name="inference_prediction_probabilities")
 
     def _build_loss(self):
         self.train_logits_seq = tf.transpose(self.train_logits, [1, 0, 2])

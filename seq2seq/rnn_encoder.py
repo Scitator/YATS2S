@@ -36,12 +36,12 @@ class DynamicRnnEncoder(object):
         self.inputs = tf.placeholder(
             shape=(None, None),
             dtype=tf.int32,
-            name='encoder_inputs')
+            name="encoder_inputs")
         self.inputs_length = tf.placeholder(
             shape=(None,),
             dtype=tf.int32,
-            name='encoder_inputs_length')
-        self.global_step = tf.Variable(0, name='global_step', trainable=False)
+            name="encoder_inputs_length")
+        self.global_step = tf.Variable(0, name="global_step", trainable=False)
 
         with tf.variable_scope("embedding") as scope:
             self.inputs_embedded = tf.nn.embedding_lookup(
@@ -64,7 +64,7 @@ class DynamicRnnEncoder(object):
 
                 self.outputs = tf.concat(
                     (encoder_fw_outputs, encoder_bw_outputs), 2,
-                    name='bidirectional_output_concat')
+                    name="bidirectional_output_concat")
 
                 # @TODO: need to check correctness
                 if not isinstance(encoder_fw_state, rnn.LSTMStateTuple) and \
@@ -74,14 +74,14 @@ class DynamicRnnEncoder(object):
 
                 if isinstance(encoder_fw_state, rnn.LSTMStateTuple):  # for LSTM cell
                     state_c = tf.concat(
-                        (encoder_fw_state.c, encoder_bw_state.c), 1, name='bidirectional_concat_c')
+                        (encoder_fw_state.c, encoder_bw_state.c), 1, name="bidirectional_concat_c")
                     state_h = tf.concat(
-                        (encoder_fw_state.h, encoder_bw_state.h), 1, name='bidirectional_concat_h')
+                        (encoder_fw_state.h, encoder_bw_state.h), 1, name="bidirectional_concat_h")
                     self.state = rnn.LSTMStateTuple(c=state_c, h=state_h)
                 else:
                     self.state = tf.concat(
                         (encoder_fw_state, encoder_bw_state), 1,
-                        name='bidirectional_state_concat')
+                        name="bidirectional_state_concat")
         else:
             with tf.variable_scope("Encoder") as scope:
                 outputs, state = \

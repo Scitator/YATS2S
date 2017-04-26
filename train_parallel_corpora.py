@@ -57,79 +57,79 @@ def parse_args():
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
-        '--from_corpora_path',
+        "--from_corpora_path",
         type=str,
-        default='data/quora/pph1_enc.pkl')
+        default="data/quora/pph1_enc.pkl")
     parser.add_argument(
-        '--to_corpora_path',
+        "--to_corpora_path",
         type=str,
-        default='data/quora/pph2_enc.pkl')
+        default="data/quora/pph2_enc.pkl")
     parser.add_argument(
-        '--vocab_path',
+        "--vocab_path",
         type=str,
-        default='data/quora/pph_vocab.txt')
+        default="data/quora/pph_vocab.txt")
     parser.add_argument(
-        '--token2id_path',
+        "--token2id_path",
         type=str,
-        default='data/quora/token2id.json')
+        default="data/quora/token2id.json")
     parser.add_argument(
-        '--id2token_path',
+        "--id2token_path",
         type=str,
-        default='data/quora/id2token.json')
+        default="data/quora/id2token.json")
 
     parser.add_argument(
-        '--double_iter',
-        action='store_true',
+        "--double_iter",
+        action="store_true",
         default=False)
 
     parser.add_argument(
-        '--gpu_option',
+        "--gpu_option",
         type=float,
         default=0.45)
     parser.add_argument(
-        '--encoder_size',
+        "--encoder_size",
         type=int,
         default=512)
     parser.add_argument(
-        '--embedding_size',
+        "--embedding_size",
         type=int,
         default=64)
     parser.add_argument(
-        '--batch_size',
+        "--batch_size",
         type=int,
         default=64)
     parser.add_argument(
-        '--decoder_size',
+        "--decoder_size",
         type=int,
         default=512)
     parser.add_argument(
-        '--bidirectional',
-        action='store_true',
+        "--bidirectional",
+        action="store_true",
         default=False)
     parser.add_argument(
-        '--attention',
-        action='store_true',
+        "--attention",
+        action="store_true",
         default=False)
     parser.add_argument(
-        '--n_epochs',
+        "--n_epochs",
         type=int,
         default=1000)
     parser.add_argument(
-        '--log_dir',
+        "--log_dir",
         type=str,
         default="./logs")
 
     parser.add_argument(
-        '--lr_decay_on',
+        "--lr_decay_on",
         type=str,
-        default='epoch',
-        choices=['epoch', 'batch'])
+        default="epoch",
+        choices=["epoch", "batch"])
     parser.add_argument(
-        '--lr_decay_steps',
+        "--lr_decay_steps",
         type=int,
         default=1)
     parser.add_argument(
-        '--lr_decay_koef',
+        "--lr_decay_koef",
         type=float,
         default=0.99)
 
@@ -217,5 +217,5 @@ def main():
             run_params)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

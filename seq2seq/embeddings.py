@@ -26,6 +26,6 @@ class Embeddings(object):
         self.vocab_size = vocab_size
         self.embedding_size = embedding_size
 
-        self.global_step = tf.Variable(0, name='global_step', trainable=False)
+        self.global_step = tf.Variable(0, name="global_step", trainable=False)
         self.embedding_matrix = create_embedding_matrix(
             self.vocab_size, self.embedding_size, scope=self.scope)
