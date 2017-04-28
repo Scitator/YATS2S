@@ -130,7 +130,7 @@ def parse_args():
     parser.add_argument(
         "--n_batch",
         type=int,
-        default=-1
+        default=-1)
     parser.add_argument(
         "--log_dir",
         type=str,
