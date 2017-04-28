@@ -173,6 +173,7 @@ def main():
     vocab_size = len(vocab) + 3
     emb_size = args.embedding_size
     batch_size = args.batch_size
+    n_batch = args.n_batch
 
     encoder_args = {
         "cell": rnn.LSTMCell(args.encoder_size),
@@ -234,6 +235,9 @@ def main():
 
         train_iter = seq2seq_generator_wrapper(train_generator, double=args.double_iter)
         val_iter = seq2seq_generator_wrapper(val_generator, double=args.double_iter)
+
+        if args.lr_decay_on == "epoch":
+            optimization_args["decay_steps"] *= n_batch
     else:
         with open(args.from_corpora_path, "rb") as fout:
             pph1_enc = pickle.load(fout)
@@ -279,7 +283,7 @@ def main():
             train_iter,
             val_iter,
             run_params,
-            args.n_batch)
+            n_batch)
 
 
 if __name__ == "__main__":
