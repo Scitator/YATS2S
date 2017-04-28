@@ -191,18 +191,18 @@ def main():
     }
 
     if "*" in args.from_corpora_path and "*" in args.to_corpora_path:
-        corpora_from_files = masked_files(args.from_corpora_path)
-        corpora_to_files = masked_files(args.to_corpora_path)
+        corpora_from_files = np.array(masked_files(args.from_corpora_path))
+        corpora_to_files = np.array(masked_files(args.to_corpora_path))
         assert len(corpora_from_files) == len(corpora_to_files)
 
         indices = np.arange(len(corpora_from_files))
         train_ids, val_ids = train_test_split(indices, test_size=0.2, random_state=42)
 
-        train_from_files = [corpora_from_files[i] for i in train_ids]
-        train_to_files = [corpora_to_files[i] for i in train_ids]
+        train_from_files = np.array([corpora_from_files[i] for i in train_ids])
+        train_to_files = np.array([corpora_to_files[i] for i in train_ids])
 
-        val_from_files = [corpora_from_files[i] for i in val_ids]
-        val_to_files = [corpora_to_files[i] for i in val_ids]
+        val_from_files = np.array([corpora_from_files[i] for i in val_ids])
+        val_to_files = np.array([corpora_to_files[i] for i in val_ids])
 
         train_corpora_from_it = files_data_generator(
             mask=train_from_files,
