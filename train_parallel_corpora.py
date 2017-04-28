@@ -58,7 +58,7 @@ def seq2seq_iter(data, batch_size, double=False):
 
 def seq2seq_generator_wrapper(generator, double=False):
     for batch in generator:
-        seq, target = zip(*batch)
+        seq, target = batch
         seq, seq_len = time_major_batch(seq)
         target, target_len = time_major_batch(target)
         yield seq, seq_len, target, target_len
