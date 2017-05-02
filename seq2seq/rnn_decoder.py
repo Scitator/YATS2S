@@ -95,8 +95,11 @@ class DynamicRnnDecoder(object):
 
         with tf.variable_scope("Decoder") as scope:
 
-            def logits_layer(outputs):
-                return layers.dense(outputs, self.vocab_size, name="logits_layer")
+            def logits_fn(outputs):
+                return layers.dense(outputs, self.vocab_size, name="logits_fn")
+
+            decoder_output_layer = None
+            # layers.Dense(self.vocab_size, name="decoder_output_layer")
 
             if not self.attention:
                 train_helper = seq2seq.TrainingHelper(
@@ -119,7 +122,6 @@ class DynamicRnnDecoder(object):
                 #     maximum_length=tf.reduce_max(self.encoder_inputs_length) + 3,
                 #     num_decoder_symbols=self.vocab_size)
             else:
-
                 # attention_states: size [batch_size, max_time, num_units]
                 attention_states = tf.transpose(self.encoder_outputs, [1, 0, 2])
 
@@ -156,13 +158,7 @@ class DynamicRnnDecoder(object):
                 cell=self.cell,
                 helper=train_helper,
                 initial_state=self.encoder_state,
-                output_layer=logits_layer)
-
-            inference_decoder = seq2seq.BasicDecoder(
-                cell=self.cell,
-                helper=inference_helper,
-                initial_state=self.encoder_state,
-                output_layer=logits_layer)
+                output_layer=decoder_output_layer)
 
             # (self.train_outputs,
             #  self.train_state,
@@ -174,9 +170,12 @@ class DynamicRnnDecoder(object):
             #     time_major=True,
             #     scope=scope)
 
-            self.train_logits, self.train_state = seq2seq.dynamic_decode(
-                decoder=train_decoder,
-                output_time_major=True)
+            # @TODO: undocumented, need to check
+            ((self.train_outputs, self.train_sampled_ids), self.train_state) = \
+                seq2seq.dynamic_decode(
+                    decoder=train_decoder,
+                    output_time_major=True)
+            self.train_logits = logits_fn(self.train_outputs)
 
             self.train_prediction = tf.argmax(
                 self.train_logits, axis=-1,
@@ -195,9 +194,17 @@ class DynamicRnnDecoder(object):
             #     time_major=True,
             #     scope=scope)
 
-            self.inference_logits, self.inference_state = seq2seq.dynamic_decode(
-                decoder=inference_decoder,
-                output_time_major=True)
+            inference_decoder = seq2seq.BasicDecoder(
+                cell=self.cell,
+                helper=inference_helper,
+                initial_state=self.encoder_state,
+                output_layer=decoder_output_layer)
+
+            ((self.inference_outputs, self.inference_sampled_ids), self.inference_state) = \
+                seq2seq.dynamic_decode(
+                    decoder=inference_decoder,
+                    output_time_major=True)
+            self.inference_logits = logits_fn(self.inference_outputs)
 
             self.inference_prediction = tf.argmax(
                 self.inference_logits, axis=-1,
