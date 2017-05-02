@@ -105,7 +105,7 @@ class DynamicRnnDecoder(object):
                     time_major=True)
                 inference_helper = seq2seq.GreedyEmbeddingHelper(
                     embedding=self.embedding_matrix,
-                    start_tokens=self.EOS,
+                    start_tokens=tf.ones([batch_size], dtype=tf.int32) * self.EOS,
                     end_token=self.EOS)
 
                 # train_fn = seq2seq.simple_decoder_fn_train(
