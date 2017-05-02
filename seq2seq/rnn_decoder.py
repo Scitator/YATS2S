@@ -6,7 +6,7 @@ from seq2seq.embeddings import create_embedding_matrix
 
 class DynamicRnnDecoder(object):
     def __init__(self, cell, encoder_state, encoder_outputs, encoder_inputs_length,
-                 attention=False,
+                 attention=False, training_mode="greedy", decoding_mode="basic",
                  embedding_matrix=None, vocab_size=None, embedding_size=None,
                  special=None):
         assert embedding_matrix is not None \
@@ -26,6 +26,10 @@ class DynamicRnnDecoder(object):
         self.train_op = None
         self.cell = cell
         self.encoder_state = encoder_state
+
+        self.training_mode = training_mode
+        self.decoding_mode = decoding_mode
+
         # @TODO: should be optimal
         self.encoder_outputs = encoder_outputs
         self.encoder_inputs_length = encoder_inputs_length
@@ -124,10 +128,30 @@ class DynamicRnnDecoder(object):
                         shape=(batch_size, self.decoder_hidden_units),
                         dtype=tf.float32))
 
-            train_helper = seq2seq.TrainingHelper(
-                inputs=self.inputs_embedded,
-                sequence_length=self.train_length,
-                time_major=True)
+            if self.training_mode == "greedy":
+                train_helper = seq2seq.TrainingHelper(
+                    inputs=self.inputs_embedded,
+                    sequence_length=self.train_length,
+                    time_major=True)
+            elif self.training_mode == "scheduled_sampling_embedding":
+                self.scheduled_sampling_probability = tf.placeholder(dtype=tf.float32, shape=())
+                train_helper = seq2seq.ScheduledEmbeddingTrainingHelper(
+                    inputs=self.inputs_embedded,
+                    sequence_length=self.train_length,
+                    embedding=self.embedding_matrix,
+                    sampling_probability=self.scheduled_sampling_probability,
+                    time_major=True)
+            elif self.training_mode == "scheduled_sampling_output":
+                # @TODO: what the difference?
+                self.scheduled_sampling_probability = tf.placeholder(dtype=tf.float32, shape=())
+                train_helper = seq2seq.ScheduledOutputTrainingHelper(
+                    inputs=self.inputs_embedded,
+                    sequence_length=self.train_length,
+                    sampling_probability=self.scheduled_sampling_probability,
+                    time_major=True)
+            else:
+                raise NotImplemented()
+
             inference_helper = seq2seq.GreedyEmbeddingHelper(
                 embedding=self.embedding_matrix,
                 start_tokens=tf.ones([batch_size], dtype=tf.int32) * self.EOS,
