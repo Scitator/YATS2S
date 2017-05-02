@@ -1,5 +1,5 @@
 import tensorflow as tf
-from tensorflow.contrib import layers
+from tensorflow import layers
 from tensorflow.contrib import seq2seq
 from seq2seq.embeddings import create_embedding_matrix
 
@@ -95,20 +95,29 @@ class DynamicRnnDecoder(object):
 
         with tf.variable_scope("Decoder") as scope:
 
-            def logits_fn(outputs):
-                return layers.linear(outputs, self.vocab_size, scope=scope)
+            def logits_layer(outputs):
+                return layers.dense(outputs, self.vocab_size, name="logits_layer")
 
             if not self.attention:
-                train_fn = seq2seq.simple_decoder_fn_train(
-                    encoder_state=self.encoder_state)
-                inference_fn = seq2seq.simple_decoder_fn_inference(
-                    output_fn=logits_fn,
-                    encoder_state=self.encoder_state,
-                    embeddings=self.embedding_matrix,
-                    start_of_sequence_id=self.EOS,
-                    end_of_sequence_id=self.EOS,
-                    maximum_length=tf.reduce_max(self.encoder_inputs_length) + 3,
-                    num_decoder_symbols=self.vocab_size)
+                train_helper = seq2seq.TrainingHelper(
+                    inputs=self.inputs_embedded,
+                    sequence_length=self.train_length,
+                    time_major=True)
+                inference_helper = seq2seq.GreedyEmbeddingHelper(
+                    embedding=self.embedding_matrix,
+                    start_tokens=self.EOS,
+                    end_token=self.EOS)
+
+                # train_fn = seq2seq.simple_decoder_fn_train(
+                #     encoder_state=self.encoder_state)
+                # inference_fn = seq2seq.simple_decoder_fn_inference(
+                #     output_fn=logits_fn,
+                #     encoder_state=self.encoder_state,
+                #     embeddings=self.embedding_matrix,
+                #     start_of_sequence_id=self.EOS,
+                #     end_of_sequence_id=self.EOS,
+                #     maximum_length=tf.reduce_max(self.encoder_inputs_length) + 3,
+                #     num_decoder_symbols=self.vocab_size)
             else:
 
                 # attention_states: size [batch_size, max_time, num_units]
@@ -143,17 +152,32 @@ class DynamicRnnDecoder(object):
                     maximum_length=tf.reduce_max(self.encoder_inputs_length) + 3,
                     num_decoder_symbols=self.vocab_size)
 
-            (self.train_outputs,
-             self.train_state,
-             self.train_context_state) = seq2seq.dynamic_rnn_decoder(
+            train_decoder = seq2seq.BasicDecoder(
                 cell=self.cell,
-                decoder_fn=train_fn,
-                inputs=self.inputs_embedded,
-                sequence_length=self.train_length,
-                time_major=True,
-                scope=scope)
+                helper=train_helper,
+                initial_state=self.encoder_state,
+                output_layer=logits_layer)
 
-            self.train_logits = logits_fn(self.train_outputs)
+            inference_decoder = seq2seq.BasicDecoder(
+                cell=self.cell,
+                helper=inference_helper,
+                initial_state=self.encoder_state,
+                output_layer=logits_layer)
+
+            # (self.train_outputs,
+            #  self.train_state,
+            #  self.train_context_state) = seq2seq.dynamic_rnn_decoder(
+            #     cell=self.cell,
+            #     decoder_fn=train_fn,
+            #     inputs=self.inputs_embedded,
+            #     sequence_length=self.train_length,
+            #     time_major=True,
+            #     scope=scope)
+
+            self.train_logits, self.train_state = seq2seq.dynamic_decode(
+                decoder=train_decoder,
+                output_time_major=True)
+
             self.train_prediction = tf.argmax(
                 self.train_logits, axis=-1,
                 name="train_prediction")
@@ -163,13 +187,17 @@ class DynamicRnnDecoder(object):
 
             scope.reuse_variables()
 
-            (self.inference_logits,
-             self.inference_state,
-             self.inference_context_state) = seq2seq.dynamic_rnn_decoder(
-                cell=self.cell,
-                decoder_fn=inference_fn,
-                time_major=True,
-                scope=scope)
+            # (self.inference_logits,
+            #  self.inference_state,
+            #  self.inference_context_state) = seq2seq.dynamic_rnn_decoder(
+            #     cell=self.cell,
+            #     decoder_fn=inference_fn,
+            #     time_major=True,
+            #     scope=scope)
+
+            self.inference_logits, self.inference_state = seq2seq.dynamic_decode(
+                decoder=inference_decoder,
+                output_time_major=True)
 
             self.inference_prediction = tf.argmax(
                 self.inference_logits, axis=-1,
