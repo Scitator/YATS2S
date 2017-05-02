@@ -101,58 +101,37 @@ class DynamicRnnDecoder(object):
             decoder_output_layer = None
             # layers.Dense(self.vocab_size, name="decoder_output_layer")
 
-            if not self.attention:
-                train_helper = seq2seq.TrainingHelper(
-                    inputs=self.inputs_embedded,
-                    sequence_length=self.train_length,
-                    time_major=True)
-                inference_helper = seq2seq.GreedyEmbeddingHelper(
-                    embedding=self.embedding_matrix,
-                    start_tokens=tf.ones([batch_size], dtype=tf.int32) * self.EOS,
-                    end_token=self.EOS)
-
-                # train_fn = seq2seq.simple_decoder_fn_train(
-                #     encoder_state=self.encoder_state)
-                # inference_fn = seq2seq.simple_decoder_fn_inference(
-                #     output_fn=logits_fn,
-                #     encoder_state=self.encoder_state,
-                #     embeddings=self.embedding_matrix,
-                #     start_of_sequence_id=self.EOS,
-                #     end_of_sequence_id=self.EOS,
-                #     maximum_length=tf.reduce_max(self.encoder_inputs_length) + 3,
-                #     num_decoder_symbols=self.vocab_size)
-            else:
+            if self.attention:
                 # attention_states: size [batch_size, max_time, num_units]
                 attention_states = tf.transpose(self.encoder_outputs, [1, 0, 2])
 
-                (attention_keys,
-                 attention_values,
-                 attention_score_fn,
-                 attention_construct_fn) = seq2seq.prepare_attention(
-                    attention_states=attention_states,
-                    attention_option="bahdanau",
-                    num_units=self.decoder_hidden_units)
+                create_attention_mechanism = seq2seq.BahdanauAttention
 
-                train_fn = seq2seq.attention_decoder_fn_train(
-                    encoder_state=self.encoder_state,
-                    attention_keys=attention_keys,
-                    attention_values=attention_values,
-                    attention_score_fn=attention_score_fn,
-                    attention_construct_fn=attention_construct_fn,
-                    name="decoder_attention")
+                attention_mechanism = create_attention_mechanism(
+                    num_units=self.decoder_hidden_units,
+                    memory=attention_states,
+                    memory_sequence_length=self.encoder_inputs_length)  # @TODO: needed?
 
-                inference_fn = seq2seq.attention_decoder_fn_inference(
-                    output_fn=logits_fn,
-                    encoder_state=self.encoder_state,
-                    attention_keys=attention_keys,
-                    attention_values=attention_values,
-                    attention_score_fn=attention_score_fn,
-                    attention_construct_fn=attention_construct_fn,
-                    embeddings=self.embedding_matrix,
-                    start_of_sequence_id=self.EOS,
-                    end_of_sequence_id=self.EOS,
-                    maximum_length=tf.reduce_max(self.encoder_inputs_length) + 3,
-                    num_decoder_symbols=self.vocab_size)
+                self.cell = seq2seq.DynamicAttentionWrapper(
+                    cell=self.cell,
+                    attention_mechanism=attention_mechanism,
+                    attention_size=self.decoder_hidden_units)  # @TODO: attention size?
+
+                # @TODO: hack or not a hack? why this attention size?
+                self.encoder_state = seq2seq.DynamicAttentionWrapperState(
+                    cell_state=self.encoder_state,
+                    attention=tf.zeros(
+                        shape=(batch_size, self.decoder_hidden_units),
+                        dtype=tf.float32))
+
+            train_helper = seq2seq.TrainingHelper(
+                inputs=self.inputs_embedded,
+                sequence_length=self.train_length,
+                time_major=True)
+            inference_helper = seq2seq.GreedyEmbeddingHelper(
+                embedding=self.embedding_matrix,
+                start_tokens=tf.ones([batch_size], dtype=tf.int32) * self.EOS,
+                end_token=self.EOS)
 
             train_decoder = seq2seq.BasicDecoder(
                 cell=self.cell,
@@ -160,17 +139,13 @@ class DynamicRnnDecoder(object):
                 initial_state=self.encoder_state,
                 output_layer=decoder_output_layer)
 
-            # (self.train_outputs,
-            #  self.train_state,
-            #  self.train_context_state) = seq2seq.dynamic_rnn_decoder(
-            #     cell=self.cell,
-            #     decoder_fn=train_fn,
-            #     inputs=self.inputs_embedded,
-            #     sequence_length=self.train_length,
-            #     time_major=True,
-            #     scope=scope)
+            inference_decoder = seq2seq.BasicDecoder(
+                cell=self.cell,
+                helper=inference_helper,
+                initial_state=self.encoder_state,
+                output_layer=decoder_output_layer)
 
-            # @TODO: undocumented, need to check
+            # @TODO: undocumented, need to check, what is sampled ids?
             ((self.train_outputs, self.train_sampled_ids), self.train_state) = \
                 seq2seq.dynamic_decode(
                     decoder=train_decoder,
@@ -185,20 +160,6 @@ class DynamicRnnDecoder(object):
                 name="train_prediction_probabilities")
 
             scope.reuse_variables()
-
-            # (self.inference_logits,
-            #  self.inference_state,
-            #  self.inference_context_state) = seq2seq.dynamic_rnn_decoder(
-            #     cell=self.cell,
-            #     decoder_fn=inference_fn,
-            #     time_major=True,
-            #     scope=scope)
-
-            inference_decoder = seq2seq.BasicDecoder(
-                cell=self.cell,
-                helper=inference_helper,
-                initial_state=self.encoder_state,
-                output_layer=decoder_output_layer)
 
             ((self.inference_outputs, self.inference_sampled_ids), self.inference_state) = \
                 seq2seq.dynamic_decode(
