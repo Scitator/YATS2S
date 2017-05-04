@@ -115,34 +115,31 @@ class DynamicRnnDecoder(object):
             decoder_output_layer = None
             # layers.Dense(self.vocab_size, name="decoder_output_layer")
 
+            beam_width = 5
+
             if self.attention:
                 # attention_states: size [batch_size, max_time, num_units]
                 attention_states = tf.transpose(self.encoder_outputs, [1, 0, 2])
 
                 create_attention_mechanism = seq2seq.BahdanauAttention
 
-                attention_mechanism = create_attention_mechanism(
+                inference_attention_mechanism = create_attention_mechanism(
                     num_units=self.decoder_hidden_units,
                     memory=attention_states,
                     memory_sequence_length=self.encoder_inputs_length)  # @TODO: needed?
 
-                self.cell = seq2seq.AttentionWrapper(
+                inference_cell = seq2seq.AttentionWrapper(
                     cell=self.cell,
-                    attention_mechanism=attention_mechanism,
+                    attention_mechanism=inference_attention_mechanism,
                     attention_layer_size=self.decoder_hidden_units)  # @TODO: attention size?
 
-                initial_state = self.cell.zero_state(
+                inference_initial_state = inference_cell.zero_state(
                     dtype=tf.float32, batch_size=self.decoder_batch_size)
-                initial_state = initial_state.clone(cell_state=self.encoder_state)
-                # self.encoder_state = initial_state
-                # @TODO: hack or not a hack? why this attention size?
-                # self.encoder_state = seq2seq.AttentionWrapperState(
-                #     cell_state=self.encoder_state,
-                #     attention=tf.zeros(
-                #         shape=(batch_size, self.decoder_hidden_units),
-                #         dtype=tf.float32))
+                inference_initial_state = inference_initial_state.clone(
+                    cell_state=self.encoder_state)
             else:
-                initial_state = self.encoder_state
+                inference_cell = self.cell
+                inference_initial_state = self.encoder_state
 
             if self.training_mode == "greedy":
                 train_helper = seq2seq.TrainingHelper(
@@ -169,9 +166,9 @@ class DynamicRnnDecoder(object):
                 raise NotImplemented()
 
             train_decoder = seq2seq.BasicDecoder(
-                cell=self.cell,
+                cell=inference_cell,
                 helper=train_helper,
-                initial_state=initial_state,
+                initial_state=inference_initial_state,
                 output_layer=decoder_output_layer)
 
             inference_helper = seq2seq.GreedyEmbeddingHelper(
@@ -180,9 +177,9 @@ class DynamicRnnDecoder(object):
                 end_token=self.EOS)
 
             inference_decoder = seq2seq.BasicDecoder(
-                cell=self.cell,
+                cell=inference_cell,
                 helper=inference_helper,
-                initial_state=initial_state,
+                initial_state=inference_initial_state,
                 output_layer=decoder_output_layer)
 
             # @TODO: undocumented, need to check, what is sampled ids?
@@ -217,19 +214,44 @@ class DynamicRnnDecoder(object):
                 self.train_logits, dim=-1,
                 name="inference_prediction_probabilities")
 
-            beam_width = 3
-
-            if isinstance(initial_state, LSTMStateTuple):
+            if isinstance(self.encoder_state, LSTMStateTuple):
                 beam_initial_state = LSTMStateTuple(
-                    tf.concat([initial_state[0]] * beam_width, axis=0),
-                    tf.concat([initial_state[1]] * beam_width, axis=0))
+                    seq2seq.tile_batch(self.encoder_state[0], multiplier=beam_width),
+                    seq2seq.tile_batch(self.encoder_state[1], multiplier=beam_width))
             else:
-                beam_initial_state = tf.concat([initial_state] * beam_width, axis=0)
-            
+                beam_initial_state = seq2seq.tile_batch(self.encoder_state, multiplier=beam_width)
+
+            if self.attention:
+                beam_inputs = seq2seq.tile_batch(
+                    attention_states, multiplier=beam_width)
+                beam_sequence_length = seq2seq.tile_batch(
+                    self.encoder_inputs_length, multiplier=beam_width)
+
+                # beam_attention_mechanism = create_attention_mechanism(
+                #     num_units=self.decoder_hidden_units,
+                #     memory=beam_inputs,
+                #     memory_sequence_length=beam_sequence_length)
+
+                beam_cell = seq2seq.AttentionWrapper(
+                    cell=self.cell,
+                    attention_mechanism=inference_attention_mechanism,
+                    attention_layer_size=self.decoder_hidden_units)
+
+                # @TODO: bad code, need renaming
+                zero_beam_initial_state = beam_cell.zero_state(
+                    dtype=tf.float32, batch_size=self.decoder_batch_size * beam_width)
+                beam_initial_state = zero_beam_initial_state.clone(
+                    cell_state=beam_initial_state)
+            else:
+                beam_cell = inference_cell
+            # beam_cell = inference_cell
+            # @TODO: need to tile all: attention, input states and other
+            # beam_initial_state = inference_initial_state
+
             beam_decoder = seq2seq.BeamSearchDecoder(
-                cell=self.cell,
+                cell=beam_cell,
                 embedding=self.embedding_matrix,
-                start_tokens=[self.EOS] * self.decoder_batch_size,
+                start_tokens=[self.EOS] * self.decoder_batch_size * beam_width,
                 end_token=self.EOS,
                 initial_state=beam_initial_state,
                 beam_width=beam_width)
