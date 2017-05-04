@@ -29,7 +29,7 @@ class DynamicVec2Seq(object):
         self.decoder = DynamicRnnDecoder(
             encoder_state=self.encoder_state,
             encoder_outputs=None,
-            encoder_inputs_length=decoder_args.get("maximum_length", 10),
+            encoder_inputs_length=encoder_args.get("maximum_length", 10),
             embedding_matrix=self.embeddings.embedding_matrix,
             **decoder_args)
 

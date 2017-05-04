@@ -163,13 +163,13 @@ def main():
 
     encoder_args = {
         "input_shape": (images_enc.shape[1], ),
-        "state_shape": args.encoder_size
+        "state_shape": args.encoder_size,
+        "maximum_length": args.maximum_length
     }
 
     decoder_args = {
         "cell": rnn.LSTMCell(args.decoder_size),
-        "attention": False,
-        "maximum_length": args.maximum_length
+        "attention": False
     }
 
     optimization_args = {
