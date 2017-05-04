@@ -127,6 +127,11 @@ def parse_args():
         type=float,
         default=0.99)
 
+    parser.add_argument(
+        "--maximum_length",
+        type=int,
+        default=20)
+
     args, _ = parser.parse_known_args()
     return args
 
@@ -164,6 +169,7 @@ def main():
     decoder_args = {
         "cell": rnn.LSTMCell(args.decoder_size),
         "attention": False,
+        "maximum_length": args.maximum_length
     }
 
     optimization_args = {
