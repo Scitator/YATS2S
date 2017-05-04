@@ -99,6 +99,8 @@ class DynamicRnnDecoder(object):
             def logits_fn(outputs):
                 return layers.linear(outputs, self.vocab_size, scope=scope)
 
+            assert self.encoder_inputs_length is not None, "specify the number of decoded steps"
+
             if not self.attention:
                 train_fn = seq2seq.simple_decoder_fn_train(
                     encoder_state=self.encoder_state)
@@ -111,7 +113,7 @@ class DynamicRnnDecoder(object):
                     maximum_length=tf.reduce_max(self.encoder_inputs_length) + 3,
                     num_decoder_symbols=self.vocab_size)
             else:
-                assert self.encoder_outputs is not None, self.encoder_inputs_length is not None
+                assert self.encoder_outputs is not None
                 # attention_states: size [batch_size, max_time, num_units]
                 attention_states = tf.transpose(self.encoder_outputs, [1, 0, 2])
 

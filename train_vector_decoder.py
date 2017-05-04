@@ -45,16 +45,15 @@ def vec2seq_iter(data, batch_size):
     indices = np.arange(len(data))
     for batch in iterate_minibatches(indices, batch_size):
         batch = [data[i] for i in batch]
-        vec, target = zip(*batch)
-        target, target_len = time_major_batch(target)
-        yield vec, target, target_len
-
-
-def vec2seq_generator_wrapper(generator):
-    for batch in generator:
-        vec, target = batch
-        target, target_len = time_major_batch(target)
-        yield vec, target, target_len
+        vec, targets = zip(*batch)
+        targets = [(i, x) for i, y in enumerate(targets) for x in y]
+        target_indices = np.arange(len(data))
+        for target_indices_batch in iterate_minibatches(target_indices, batch_size):
+            target = [targets[i] for i in target_indices_batch]
+            vec_batch = [vec[i] for i, _ in target]
+            target_batch = [x for _, x in target]
+            target_batch, target_batch_len = time_major_batch(target_batch)
+            yield vec_batch, target_batch, target_batch_len
 
 
 def parse_args():
@@ -153,19 +152,18 @@ def main():
     batch_size = args.batch_size
     n_batch = args.n_batch
 
-    with open(args.from_vec_path, "rb") as fout:
-        images_enc = np.load(fout, mmap_mode="r")
+    images_enc = np.load(args.from_vec_path, mmap_mode="r")
     with open(args.to_corpora_path, "rb") as fout:
         labels_enc = pickle.load(fout)
 
     encoder_args = {
-        "input_shape": images_enc.shape[1],
+        "input_shape": (images_enc.shape[1], ),
         "state_shape": args.encoder_size
     }
 
     decoder_args = {
         "cell": rnn.LSTMCell(args.decoder_size),
-        "attention": args.attention,
+        "attention": False,
     }
 
     optimization_args = {
