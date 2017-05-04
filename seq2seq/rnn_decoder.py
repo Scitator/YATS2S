@@ -5,7 +5,8 @@ from seq2seq.embeddings import create_embedding_matrix
 
 
 class DynamicRnnDecoder(object):
-    def __init__(self, cell, encoder_state, encoder_outputs, encoder_inputs_length,
+    def __init__(self, cell, encoder_state,
+                 encoder_outputs=None, encoder_inputs_length=None,
                  attention=False,
                  embedding_matrix=None, vocab_size=None, embedding_size=None,
                  special=None):
@@ -110,7 +111,7 @@ class DynamicRnnDecoder(object):
                     maximum_length=tf.reduce_max(self.encoder_inputs_length) + 3,
                     num_decoder_symbols=self.vocab_size)
             else:
-
+                assert self.encoder_outputs is not None, self.encoder_inputs_length is not None
                 # attention_states: size [batch_size, max_time, num_units]
                 attention_states = tf.transpose(self.encoder_outputs, [1, 0, 2])
 
