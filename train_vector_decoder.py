@@ -47,7 +47,7 @@ def vec2seq_iter(data, batch_size):
         batch = [data[i] for i in batch]
         vec, targets = zip(*batch)
         targets = [(i, x) for i, y in enumerate(targets) for x in y]
-        target_indices = np.arange(len(data))
+        target_indices = np.arange(len(targets))
         for target_indices_batch in iterate_minibatches(target_indices, batch_size):
             target = [targets[i] for i in target_indices_batch]
             vec_batch = [vec[i] for i, _ in target]
