@@ -116,13 +116,12 @@ class DynamicRnnDecoder(object):
 
             # decoder_output_layer = None
             decoder_output_layer = Dense(
-                self.vocab_size, 
+                self.vocab_size,
                 name="decoder_output_layer")
 
             if self.attention:
                 # attention_states: size [batch_size, max_time, num_units]
                 attention_states = tf.transpose(self.encoder_outputs, [1, 0, 2])
-
                 create_attention_mechanism = seq2seq.BahdanauAttention
 
             if self.decoding_mode == "greedy":
@@ -173,14 +172,13 @@ class DynamicRnnDecoder(object):
                         self.encoder_state, multiplier=beam_width)
 
                 if self.attention:
-                    beam_inputs = seq2seq.tile_batch(
-                        attention_states, multiplier=beam_width)
+                    attention_states = seq2seq.tile_batch(attention_states, multiplier=beam_width)
                     beam_sequence_length = seq2seq.tile_batch(
                         self.encoder_inputs_length, multiplier=beam_width)
 
                     inference_attention_mechanism = create_attention_mechanism(
                         num_units=self.decoder_hidden_units,
-                        memory=beam_inputs,
+                        memory=attention_states,
                         memory_sequence_length=beam_sequence_length)
 
                     inference_cell = seq2seq.AttentionWrapper(
@@ -213,7 +211,7 @@ class DynamicRnnDecoder(object):
                 self.scheduled_sampling_probability = tf.placeholder(dtype=tf.float32, shape=())
                 train_helper = seq2seq.ScheduledEmbeddingTrainingHelper(
                     inputs=inputs_embedded,
-                    sequence_length=self.train_length,
+                    sequence_length=train_length,
                     embedding=self.embedding_matrix,
                     sampling_probability=self.scheduled_sampling_probability,
                     time_major=True)
@@ -227,14 +225,13 @@ class DynamicRnnDecoder(object):
                     time_major=True)
             else:
                 raise NotImplemented()
-
+            
             train_decoder = seq2seq.BasicDecoder(
                 cell=inference_cell,
                 helper=train_helper,
                 initial_state=inference_initial_state,
                 output_layer=decoder_output_layer)
 
-            # @TODO: undocumented, need to check, what is sampled ids?
             ((self.train_outputs, self.train_sampled_ids),
                 self.train_state, self.train_lengths) = \
                 seq2seq.dynamic_decode(
