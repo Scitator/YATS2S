@@ -1,4 +1,5 @@
 import tensorflow as tf
+from tensorflow.python.layers.core import Dense
 from tensorflow import layers
 from tensorflow.contrib import seq2seq
 from seq2seq.embeddings import create_embedding_matrix
@@ -7,7 +8,7 @@ from tensorflow.contrib.rnn import LSTMStateTuple
 
 class DynamicRnnDecoder(object):
     def __init__(self, cell, encoder_state, encoder_outputs, encoder_inputs_length,
-                 attention=False, training_mode="greedy", decoding_mode="basic",
+                 attention=False, training_mode="greedy", decoding_mode="greedy", beam_width=5,
                  embedding_matrix=None, vocab_size=None, embedding_size=None,
                  special=None):
         assert embedding_matrix is not None \
@@ -30,6 +31,7 @@ class DynamicRnnDecoder(object):
 
         self.training_mode = training_mode
         self.decoding_mode = decoding_mode
+        self.beam_width = beam_width
 
         # @TODO: should be optimal
         self.encoder_outputs = encoder_outputs
@@ -109,13 +111,13 @@ class DynamicRnnDecoder(object):
 
         with tf.variable_scope("Decoder") as scope:
 
-            def logits_fn(outputs):
-                return layers.dense(outputs, self.vocab_size, name="logits_fn")
+            # def logits_fn(outputs):
+                # return layers.dense(outputs, self.vocab_size, name="logits_fn")
 
-            decoder_output_layer = None
-            # layers.Dense(self.vocab_size, name="decoder_output_layer")
-
-            beam_width = 5
+            # decoder_output_layer = None
+            decoder_output_layer = Dense(
+                self.vocab_size, 
+                name="decoder_output_layer")
 
             if self.attention:
                 # attention_states: size [batch_size, max_time, num_units]
@@ -123,33 +125,94 @@ class DynamicRnnDecoder(object):
 
                 create_attention_mechanism = seq2seq.BahdanauAttention
 
-                inference_attention_mechanism = create_attention_mechanism(
-                    num_units=self.decoder_hidden_units,
-                    memory=attention_states,
-                    memory_sequence_length=self.encoder_inputs_length)  # @TODO: needed?
+            if self.decoding_mode == "greedy":
+                inputs_embedded = self.inputs_embedded
+                train_length = self.train_length
 
-                inference_cell = seq2seq.AttentionWrapper(
-                    cell=self.cell,
-                    attention_mechanism=inference_attention_mechanism,
-                    attention_layer_size=self.decoder_hidden_units)  # @TODO: attention size?
+                if self.attention:
+                    inference_attention_mechanism = create_attention_mechanism(
+                        num_units=self.decoder_hidden_units,
+                        memory=attention_states,
+                        memory_sequence_length=self.encoder_inputs_length)  # @TODO: needed?
 
-                inference_initial_state = inference_cell.zero_state(
-                    dtype=tf.float32, batch_size=self.decoder_batch_size)
-                inference_initial_state = inference_initial_state.clone(
-                    cell_state=self.encoder_state)
-            else:
-                inference_cell = self.cell
-                inference_initial_state = self.encoder_state
+                    inference_cell = seq2seq.AttentionWrapper(
+                        cell=self.cell,
+                        attention_mechanism=inference_attention_mechanism,
+                        attention_layer_size=self.decoder_hidden_units)  # @TODO: attention size?
+
+                    inference_initial_state = inference_cell.zero_state(
+                        dtype=tf.float32, batch_size=self.decoder_batch_size)
+                    inference_initial_state = inference_initial_state.clone(
+                        cell_state=self.encoder_state)
+                else:
+                    inference_cell = self.cell
+                    inference_initial_state = self.encoder_state
+
+                inference_helper = seq2seq.GreedyEmbeddingHelper(
+                    embedding=self.embedding_matrix,
+                    start_tokens=tf.ones([self.decoder_batch_size], dtype=tf.int32) * self.EOS,
+                    end_token=self.EOS)
+
+                inference_decoder = seq2seq.BasicDecoder(
+                    cell=inference_cell,
+                    helper=inference_helper,
+                    initial_state=inference_initial_state,
+                    output_layer=decoder_output_layer)
+            elif self.decoding_mode == "beam":
+                beam_width = self.beam_width  # @TODO: need to refactor
+
+                inputs_embedded = seq2seq.tile_batch(self.inputs_embedded, multiplier=beam_width)
+                train_length = seq2seq.tile_batch(self.train_length, multiplier=beam_width)
+
+                if isinstance(self.encoder_state, LSTMStateTuple):
+                    inference_initial_state = LSTMStateTuple(
+                        seq2seq.tile_batch(self.encoder_state[0], multiplier=beam_width),
+                        seq2seq.tile_batch(self.encoder_state[1], multiplier=beam_width))
+                else:
+                    inference_initial_state = seq2seq.tile_batch(
+                        self.encoder_state, multiplier=beam_width)
+
+                if self.attention:
+                    beam_inputs = seq2seq.tile_batch(
+                        attention_states, multiplier=beam_width)
+                    beam_sequence_length = seq2seq.tile_batch(
+                        self.encoder_inputs_length, multiplier=beam_width)
+
+                    inference_attention_mechanism = create_attention_mechanism(
+                        num_units=self.decoder_hidden_units,
+                        memory=beam_inputs,
+                        memory_sequence_length=beam_sequence_length)
+
+                    inference_cell = seq2seq.AttentionWrapper(
+                        cell=self.cell,
+                        attention_mechanism=inference_attention_mechanism,
+                        attention_layer_size=self.decoder_hidden_units)
+
+                    # @TODO: bad code, need renaming
+                    zero_initial_state = inference_cell.zero_state(
+                        dtype=tf.float32, batch_size=self.decoder_batch_size * beam_width)
+                    inference_initial_state = zero_initial_state.clone(
+                        cell_state=inference_initial_state)
+                else:
+                    inference_cell = self.cell
+
+                inference_decoder = seq2seq.BeamSearchDecoder(
+                    cell=inference_cell,
+                    embedding=self.embedding_matrix,
+                    start_tokens=[self.EOS] * self.decoder_batch_size * beam_width,
+                    end_token=self.EOS,
+                    initial_state=inference_initial_state,
+                    beam_width=beam_width)
 
             if self.training_mode == "greedy":
                 train_helper = seq2seq.TrainingHelper(
-                    inputs=self.inputs_embedded,
-                    sequence_length=self.train_length,
+                    inputs=inputs_embedded,
+                    sequence_length=train_length,
                     time_major=True)
             elif self.training_mode == "scheduled_sampling_embedding":
                 self.scheduled_sampling_probability = tf.placeholder(dtype=tf.float32, shape=())
                 train_helper = seq2seq.ScheduledEmbeddingTrainingHelper(
-                    inputs=self.inputs_embedded,
+                    inputs=inputs_embedded,
                     sequence_length=self.train_length,
                     embedding=self.embedding_matrix,
                     sampling_probability=self.scheduled_sampling_probability,
@@ -158,8 +221,8 @@ class DynamicRnnDecoder(object):
                 # @TODO: what the difference?
                 self.scheduled_sampling_probability = tf.placeholder(dtype=tf.float32, shape=())
                 train_helper = seq2seq.ScheduledOutputTrainingHelper(
-                    inputs=self.inputs_embedded,
-                    sequence_length=self.train_length,
+                    inputs=inputs_embedded,
+                    sequence_length=train_length,
                     sampling_probability=self.scheduled_sampling_probability,
                     time_major=True)
             else:
@@ -171,97 +234,53 @@ class DynamicRnnDecoder(object):
                 initial_state=inference_initial_state,
                 output_layer=decoder_output_layer)
 
-            inference_helper = seq2seq.GreedyEmbeddingHelper(
-                embedding=self.embedding_matrix,
-                start_tokens=tf.ones([self.decoder_batch_size], dtype=tf.int32) * self.EOS,
-                end_token=self.EOS)
-
-            inference_decoder = seq2seq.BasicDecoder(
-                cell=inference_cell,
-                helper=inference_helper,
-                initial_state=inference_initial_state,
-                output_layer=decoder_output_layer)
-
             # @TODO: undocumented, need to check, what is sampled ids?
             ((self.train_outputs, self.train_sampled_ids),
-             self.train_state, self.train_lengths) = \
+                self.train_state, self.train_lengths) = \
                 seq2seq.dynamic_decode(
                     decoder=train_decoder,
                     output_time_major=True)
-            self.train_logits = logits_fn(self.train_outputs)
+            # self.train_logits = logits_fn(self.train_outputs)
+            self.train_logits = self.train_outputs
 
-            self.train_prediction = tf.argmax(
-                self.train_logits, axis=-1,
-                name="train_prediction")
-            self.train_prediction_probabilities = tf.nn.softmax(
-                self.train_logits, dim=-1,
-                name="train_prediction_probabilities")
+            # self.train_prediction = tf.argmax(
+            #     self.train_logits, axis=-1,
+            #     name="train_prediction")
+            self.train_prediction = self.train_sampled_ids
+            # self.train_prediction_probabilities = tf.nn.softmax(
+            #     self.train_logits, dim=-1,
+            #     name="train_prediction_probabilities")
 
             scope.reuse_variables()
 
-            ((self.inference_outputs, self.inference_sampled_ids),
-             self.inference_state, self.inference_lengths) = \
+            (final_outputs, self.inference_state, self.inference_lengths) = \
                 seq2seq.dynamic_decode(
                     decoder=inference_decoder,
                     output_time_major=True,
-                    maximum_iterations=tf.reduce_max(self.encoder_inputs_length) + 3)
-            self.inference_logits = logits_fn(self.inference_outputs)
+                    maximum_iterations=tf.reduce_max(self.encoder_inputs_length) + 3,
+                    scope="inference_decoder")
 
-            self.inference_prediction = tf.argmax(
-                self.inference_logits, axis=-1,
-                name="inference_prediction")
-            self.inference_prediction_probabilities = tf.nn.softmax(
-                self.train_logits, dim=-1,
-                name="inference_prediction_probabilities")
+            if self.decoding_mode == "greedy":
+                (self.inference_outputs, self.inference_sampled_ids) = \
+                    (final_outputs.rnn_output, final_outputs.sample_id)
+                self.inference_scores = tf.ones(shape=[self.decoder_batch_size, 1])
+            elif self.decoding_mode == "beam":
+                (self.inference_outputs, self.inference_sampled_ids) = \
+                    (final_outputs.beam_search_decoder_output,
+                     final_outputs.predicted_ids)
+                self.inference_scores = tf.squeeze(self.inference_outputs.scores, axis=1)
+                self.inference_sampled_ids = tf.squeeze(self.inference_sampled_ids, axis=1)
+            
+            # self.inference_logits = logits_fn(self.inference_outputs)
+            self.inference_logits = self.inference_outputs
 
-            if isinstance(self.encoder_state, LSTMStateTuple):
-                beam_initial_state = LSTMStateTuple(
-                    seq2seq.tile_batch(self.encoder_state[0], multiplier=beam_width),
-                    seq2seq.tile_batch(self.encoder_state[1], multiplier=beam_width))
-            else:
-                beam_initial_state = seq2seq.tile_batch(self.encoder_state, multiplier=beam_width)
-
-            if self.attention:
-                beam_inputs = seq2seq.tile_batch(
-                    attention_states, multiplier=beam_width)
-                beam_sequence_length = seq2seq.tile_batch(
-                    self.encoder_inputs_length, multiplier=beam_width)
-
-                # beam_attention_mechanism = create_attention_mechanism(
-                #     num_units=self.decoder_hidden_units,
-                #     memory=beam_inputs,
-                #     memory_sequence_length=beam_sequence_length)
-
-                beam_cell = seq2seq.AttentionWrapper(
-                    cell=self.cell,
-                    attention_mechanism=inference_attention_mechanism,
-                    attention_layer_size=self.decoder_hidden_units)
-
-                # @TODO: bad code, need renaming
-                zero_beam_initial_state = beam_cell.zero_state(
-                    dtype=tf.float32, batch_size=self.decoder_batch_size * beam_width)
-                beam_initial_state = zero_beam_initial_state.clone(
-                    cell_state=beam_initial_state)
-            else:
-                beam_cell = inference_cell
-            # beam_cell = inference_cell
-            # @TODO: need to tile all: attention, input states and other
-            # beam_initial_state = inference_initial_state
-
-            beam_decoder = seq2seq.BeamSearchDecoder(
-                cell=beam_cell,
-                embedding=self.embedding_matrix,
-                start_tokens=[self.EOS] * self.decoder_batch_size * beam_width,
-                end_token=self.EOS,
-                initial_state=beam_initial_state,
-                beam_width=beam_width)
-
-            ((self.beam_outputs, self.beam_sampled_ids),
-             self.beam_state, self.beam_lengths) = \
-                seq2seq.dynamic_decode(
-                    decoder=beam_decoder,
-                    output_time_major=True,
-                    maximum_iterations=tf.reduce_max(self.encoder_inputs_length) + 3)
+            # self.inference_prediction = tf.argmax(
+            #     self.inference_logits, axis=-1,
+            #     name="inference_prediction")
+            self.inference_prediction = self.inference_sampled_ids
+            # self.inference_prediction_probabilities = tf.nn.softmax(
+            #     self.inference_logits, dim=-1,
+            #     name="inference_prediction_probabilities")
 
     def _build_loss(self):
         self.train_logits_seq = tf.transpose(self.train_logits, [1, 0, 2])
