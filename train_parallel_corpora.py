@@ -225,7 +225,7 @@ def main():
     decoder_args = {
         "cell": rnn.LSTMCell(args.decoder_size),
         "attention": args.attention,
-        "training_mode": args.training_mode
+        "training_mode": args.training_mode,
         "decoding_mode": args.decoding_mode,
         "beam_width": args.beam_width
     }
