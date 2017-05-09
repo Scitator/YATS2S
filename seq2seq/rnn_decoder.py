@@ -159,8 +159,11 @@ class DynamicRnnDecoder(object):
                     output_layer=decoder_output_layer)
             elif self.decoding_mode == "beam":
                 beam_width = self.beam_width  # @TODO: need to refactor
+                # just...I don't know
+                inputs_embedded = tf.transpose(self.inputs_embedded, [1, 0, 2])
+                inputs_embedded = seq2seq.tile_batch(inputs_embedded, multiplier=beam_width)
+                inputs_embedded = tf.transpose(inputs_embedded, [1, 0, 2])
 
-                inputs_embedded = seq2seq.tile_batch(self.inputs_embedded, multiplier=beam_width)
                 train_length = seq2seq.tile_batch(self.train_length, multiplier=beam_width)
 
                 if isinstance(self.encoder_state, LSTMStateTuple):
@@ -216,7 +219,6 @@ class DynamicRnnDecoder(object):
                     sampling_probability=self.scheduled_sampling_probability,
                     time_major=True)
             elif self.training_mode == "scheduled_sampling_output":
-                # @TODO: what the difference?
                 self.scheduled_sampling_probability = tf.placeholder(dtype=tf.float32, shape=())
                 train_helper = seq2seq.ScheduledOutputTrainingHelper(
                     inputs=inputs_embedded,
@@ -237,16 +239,8 @@ class DynamicRnnDecoder(object):
                 seq2seq.dynamic_decode(
                     decoder=train_decoder,
                     output_time_major=True)
-            # self.train_logits = logits_fn(self.train_outputs)
             self.train_logits = self.train_outputs
-
-            # self.train_prediction = tf.argmax(
-            #     self.train_logits, axis=-1,
-            #     name="train_prediction")
             self.train_prediction = self.train_sampled_ids
-            # self.train_prediction_probabilities = tf.nn.softmax(
-            #     self.train_logits, dim=-1,
-            #     name="train_prediction_probabilities")
 
             scope.reuse_variables()
 
@@ -267,21 +261,19 @@ class DynamicRnnDecoder(object):
                      final_outputs.predicted_ids)
                 self.inference_scores = tf.squeeze(self.inference_outputs.scores, axis=1)
                 self.inference_sampled_ids = tf.squeeze(self.inference_sampled_ids, axis=1)
-            
-            # self.inference_logits = logits_fn(self.inference_outputs)
             self.inference_logits = self.inference_outputs
-
-            # self.inference_prediction = tf.argmax(
-            #     self.inference_logits, axis=-1,
-            #     name="inference_prediction")
             self.inference_prediction = self.inference_sampled_ids
-            # self.inference_prediction_probabilities = tf.nn.softmax(
-            #     self.inference_logits, dim=-1,
-            #     name="inference_prediction_probabilities")
 
     def _build_loss(self):
         self.train_logits_seq = tf.transpose(self.train_logits, [1, 0, 2])
         self.train_targets_seq = tf.transpose(self.train_targets, [1, 0])
+        if self.decoding_mode == "beam":
+            self.train_targets_seq = seq2seq.tile_batch(
+                self.train_targets_seq, 
+                multiplier=self.beam_width)
+            self.loss_weights = seq2seq.tile_batch(
+                self.loss_weights, 
+                multiplier=self.beam_width)
         self.unreg_loss = self.loss = seq2seq.sequence_loss(
-            logits=self.train_logits_seq, targets=self.train_targets_seq,
-            weights=self.loss_weights)
+                logits=self.train_logits_seq, targets=self.train_targets_seq,
+                weights=self.loss_weights)
