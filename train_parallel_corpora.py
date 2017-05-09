@@ -69,7 +69,7 @@ def yield_seq_target(seq, target, double=False, scheduled_sampling_probability=N
 
 def seq2seq_iter(data, batch_size, double=False, scheduled_sampling_probability=None):
     indices = np.arange(len(data))
-    for batch in iterate_minibatches(indices, batch_size):
+    for batch in iterate_minibatches(indices, batch_size, shuffle=True):
         batch = [data[i] for i in batch]
         seq, target = zip(*batch)
         for yield_data in yield_seq_target(
