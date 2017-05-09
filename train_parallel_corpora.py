@@ -72,20 +72,19 @@ def seq2seq_iter(data, batch_size, double=False, scheduled_sampling_probability=
     for batch in iterate_minibatches(indices, batch_size):
         batch = [data[i] for i in batch]
         seq, target = zip(*batch)
-        for data in yield_seq_target(
+        for yield_data in yield_seq_target(
                 seq, target,
                 double=double, scheduled_sampling_probability=scheduled_sampling_probability):
-            yield data
-
+            yield yield_data
 
 
 def seq2seq_generator_wrapper(generator, double=False, scheduled_sampling_probability=None):
     for batch in generator:
         seq, target = batch
-        for data in yield_seq_target(
+        for yield_data in yield_seq_target(
                 seq, target,
                 double=double, scheduled_sampling_probability=scheduled_sampling_probability):
-            yield data
+            yield yield_data
 
 
 def parse_args():
