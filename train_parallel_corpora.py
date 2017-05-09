@@ -14,7 +14,9 @@ from seq2seq.rnn_seq2seq import DynamicSeq2Seq
 from seq2seq.batch_utils import time_major_batch
 
 
-def train_seq2seq(sess, model, train_gen, val_gen=None, run_params=None, n_batch=-1):
+def train_seq2seq(
+        sess, model, train_gen, val_gen=None, run_params=None,
+        n_batch=-1, scheduled_sampling_probability=None):
     train_params = {
         "run_keys": [
             model.decoder.loss,
@@ -25,6 +27,9 @@ def train_seq2seq(sess, model, train_gen, val_gen=None, run_params=None, n_batch
         "n_batch": n_batch
     }
 
+    if scheduled_sampling_probability is not None:
+        train_params["feed_keys"] += [model.decoder.scheduled_sampling_probability]
+
     val_params = None
     if val_gen is not None:
         val_params = {
@@ -34,6 +39,8 @@ def train_seq2seq(sess, model, train_gen, val_gen=None, run_params=None, n_batch
                           model.decoder.targets, model.decoder.targets_length],
             "n_batch": n_batch
         }
+        if scheduled_sampling_probability is not None:
+            val_params["feed_keys"] += [model.decoder.scheduled_sampling_probability]
 
     history = run_train(
         sess,
@@ -44,26 +51,41 @@ def train_seq2seq(sess, model, train_gen, val_gen=None, run_params=None, n_batch
     return history
 
 
-def seq2seq_iter(data, batch_size, double=False):
+def yield_seq_target(seq, target, double=False, scheduled_sampling_probability=None):
+    seq, seq_len = time_major_batch(seq)
+    target, target_len = time_major_batch(target)
+
+    if scheduled_sampling_probability is not None:
+        yield seq, seq_len, target, target_len, scheduled_sampling_probability
+    else:
+        yield seq, seq_len, target, target_len
+
+    if double:
+        if scheduled_sampling_probability is not None:
+            yield target, target_len, seq, seq_len, scheduled_sampling_probability
+        else:
+            yield target, target_len, seq, seq_len
+
+
+def seq2seq_iter(data, batch_size, double=False, scheduled_sampling_probability=None):
     indices = np.arange(len(data))
     for batch in iterate_minibatches(indices, batch_size):
         batch = [data[i] for i in batch]
         seq, target = zip(*batch)
-        seq, seq_len = time_major_batch(seq)
-        target, target_len = time_major_batch(target)
-        yield seq, seq_len, target, target_len
-        if double:
-            yield target, target_len, seq, seq_len
+        for data in yield_seq_target(
+                seq, target,
+                double=double, scheduled_sampling_probability=scheduled_sampling_probability):
+            yield data
 
 
-def seq2seq_generator_wrapper(generator, double=False):
+
+def seq2seq_generator_wrapper(generator, double=False, scheduled_sampling_probability=None):
     for batch in generator:
         seq, target = batch
-        seq, seq_len = time_major_batch(seq)
-        target, target_len = time_major_batch(target)
-        yield seq, seq_len, target, target_len
-        if double:
-            yield target, target_len, seq, seq_len
+        for data in yield_seq_target(
+                seq, target,
+                double=double, scheduled_sampling_probability=scheduled_sampling_probability):
+            yield data
 
 
 def parse_args():
@@ -150,6 +172,26 @@ def parse_args():
         type=float,
         default=0.99)
 
+    parser.add_argument(
+        "--training_mode",
+        type=str,
+        default="greedy",
+        choices=["greedy", "scheduled_sampling_embedding", "scheduled_sampling_output"])
+    parser.add_argument(
+        "--scheduled_sampling_probability",
+        type=float,
+        default=None)
+
+    parser.add_argument(
+        "--decoding_mode",
+        type=str,
+        default="greedy",
+        choices=["greedy", "beam"])
+    parser.add_argument(
+        "--beam_width",
+        type=int,
+        default=5)
+
     args, _ = parser.parse_known_args()
     return args
 
@@ -183,6 +225,9 @@ def main():
     decoder_args = {
         "cell": rnn.LSTMCell(args.decoder_size),
         "attention": args.attention,
+        "training_mode": args.training_mode
+        "decoding_mode": args.decoding_mode,
+        "beam_width": args.beam_width
     }
 
     optimization_args = {
@@ -233,8 +278,12 @@ def main():
         train_generator = merge_generators([train_corpora_from_it, train_corpora_to_it])
         val_generator = merge_generators([val_corpora_from_it, val_corpora_to_it])
 
-        train_iter = seq2seq_generator_wrapper(train_generator, double=args.double_iter)
-        val_iter = seq2seq_generator_wrapper(val_generator, double=args.double_iter)
+        train_iter = seq2seq_generator_wrapper(
+            train_generator, double=args.double_iter,
+            scheduled_sampling_probability=args.scheduled_sampling_probability)
+        val_iter = seq2seq_generator_wrapper(
+            val_generator, double=args.double_iter,
+            scheduled_sampling_probability=args.scheduled_sampling_probability)
 
         if args.lr_decay_on == "epoch":
             optimization_args["decay_steps"] *= n_batch
@@ -255,8 +304,14 @@ def main():
         val_target = [pph2_enc[i] for i in val_ids]
         val_data = list(zip(val_input, val_target))
 
-        train_iter = seq2seq_iter(train_data, batch_size, double=args.double_iter)
-        val_iter = seq2seq_iter(val_data, batch_size, double=args.double_iter)
+        train_iter = seq2seq_iter(
+            train_data, batch_size,
+            double=args.double_iter,
+            scheduled_sampling_probability=args.scheduled_sampling_probability)
+        val_iter = seq2seq_iter(
+            val_data, batch_size,
+            double=args.double_iter,
+            scheduled_sampling_probability=args.scheduled_sampling_probability)
 
         if args.lr_decay_on == "epoch":
             optimization_args["decay_steps"] *= len(train_data) / batch_size
@@ -283,7 +338,8 @@ def main():
             train_iter,
             val_iter,
             run_params,
-            n_batch)
+            n_batch,
+            args.scheduled_sampling_probability)
 
 
 if __name__ == "__main__":
