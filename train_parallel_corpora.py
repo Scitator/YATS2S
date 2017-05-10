@@ -147,7 +147,7 @@ def parse_args():
     parser.add_argument(
         "--n_epochs",
         type=int,
-        default=1000)
+        default=100)
     parser.add_argument(
         "--n_batch",
         type=int,
@@ -170,6 +170,10 @@ def parse_args():
         "--lr_decay_koef",
         type=float,
         default=0.99)
+    parser.add_argument(
+        "--checkpoint_every",
+        type=int,
+        default=10)
 
     parser.add_argument(
         "--training_mode",
@@ -327,7 +331,9 @@ def main():
 
     run_params = {
         "n_epochs": args.n_epochs,
-        "log_dir": args.log_dir
+        "log_dir": args.log_dir,
+        "checkpoint_every": args.checkpoint_every,
+        "model_global_step": model.decoder.global_step
     }
 
     with tf.Session(config=tf.ConfigProto(gpu_options=gpu_options)) as sess:
