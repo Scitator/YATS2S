@@ -61,6 +61,11 @@ def parse_args():
         "--attention",
         action="store_true",
         default=False)
+    parser.add_argument(
+        "--lstm_connection_type",
+        type=int,
+        choices=[0, 1, 2],
+        default=1)
 
     args = parser.parse_args()
 
@@ -73,7 +78,7 @@ def create_model(vocab_size, embedding_size, encoder_args, decoder_args):
     return model
 
 
-def encode_chunk(sess, model, chunk, use_norm=False):
+def encode_chunk(sess, model, chunk, use_norm=False, lstm_connection=1):
     query_batch, query_batch_len = time_major_batch(chunk)
     predicted = sess.run(
         model.encoder.state,
@@ -82,7 +87,10 @@ def encode_chunk(sess, model, chunk, use_norm=False):
             model.encoder.inputs_length: query_batch_len})
     
     if isinstance(predicted, tuple):
-        predicted = np.concatenate((predicted[0], predicted[1]), axis=1)
+        if lstm_connection == 2:
+            predicted = np.concatenate((predicted[0], predicted[1]), axis=1)
+        else:
+            predicted = predicted[lstm_connection]
 
     if use_norm:
         normalize(predicted, axis=1, copy=False)
@@ -90,7 +98,7 @@ def encode_chunk(sess, model, chunk, use_norm=False):
     return predicted
 
 
-def rnn_encoder_encode_stream(sess, stream, model, batch_size, use_norm=False):
+def rnn_encoder_encode_stream(sess, stream, model, batch_size, use_norm=False, lstm_connection=1):
     chunk = []
     for line in stream:
         chunk.append(line)
@@ -105,7 +113,7 @@ def encoder_pipeline(
         sess, data_stream, token2id, embedding_size,
         encoder_size, bidirectional, decoder_size, attention,
         checkpoint_path,
-        batch_size=32, use_norm=False):
+        batch_size=32, use_norm=False, lstm_connection=1):
 
     encoder_args = {
         "cell": rnn.LSTMCell(encoder_size),
@@ -138,7 +146,7 @@ def main_encoder_pipeline(args):
     for embedding_matr in encoder_pipeline(
             sess, sys.stdin, token2id, args.embedding_size,
             args.encoder_size, args.bidirectional, args.decoder_size, args.attention,
-            args.checkpoint_path, args.batch_size, args.use_norm):
+            args.checkpoint_path, args.batch_size, args.use_norm, args.lstm_connection):
         for embedding_vec in embedding_matr:
             embedding_str = " ".join(list(map(str, embedding_vec)))
             print(embedding_str)
