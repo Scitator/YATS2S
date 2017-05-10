@@ -80,10 +80,9 @@ def encode_chunk(sess, model, chunk, use_norm=False):
         feed_dict={
             model.encoder.inputs: query_batch,
             model.encoder.inputs_length: query_batch_len})
-
-    assert len(predicted.shape) <= 3
-    if len(predicted.shape) == 3:
-        predicted = np.concatenate((predicted[:, :, 0], predicted[:, :, 1]), axis=2)
+    
+    if isinstance(predicted, tuple):
+        predicted = np.concatenate((predicted[0], predicted[1]), axis=1)
 
     if use_norm:
         normalize(predicted, axis=1, copy=False)
