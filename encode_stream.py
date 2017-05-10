@@ -118,8 +118,8 @@ def encoder_pipeline(
         "cell": rnn.LSTMCell(decoder_size),
         "attention": attention,
     }
-
-    model = create_model(len(token2id), embedding_size, encoder_args, decoder_args)
+    spec_symbols_bias = 3
+    model = create_model(len(token2id) + spec_symbols_bias, embedding_size, encoder_args, decoder_args)
 
     saver = tf.train.Saver()
     saver.restore(sess, checkpoint_path)
