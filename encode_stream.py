@@ -46,10 +46,6 @@ def parse_args():
         type=int,
         default=64)
     parser.add_argument(
-        "--batch_size",
-        type=int,
-        default=64)
-    parser.add_argument(
         "--decoder_size",
         type=int,
         default=512)
