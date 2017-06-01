@@ -67,18 +67,20 @@ class DynamicRnnEncoder(object):
                     (encoder_fw_outputs, encoder_bw_outputs), 2,
                     name="bidirectional_output_concat")
 
-                # @TODO: need to check correctness
-                if not isinstance(encoder_fw_state, rnn.LSTMStateTuple) and \
-                        isinstance(encoder_fw_state, tuple):  # for MultiRNNCell:
-                    encoder_fw_state = encoder_fw_state[-1]
-                    encoder_bw_state = encoder_bw_state[-1]
-
                 if isinstance(encoder_fw_state, rnn.LSTMStateTuple):  # for LSTM cell
                     state_c = tf.concat(
                         (encoder_fw_state.c, encoder_bw_state.c), 1, name="bidirectional_concat_c")
                     state_h = tf.concat(
                         (encoder_fw_state.h, encoder_bw_state.h), 1, name="bidirectional_concat_h")
                     self.state = rnn.LSTMStateTuple(c=state_c, h=state_h)
+                elif isinstance(encoder_fw_state, tuple) \
+                        and isinstance(encoder_fw_state[0], rnn.LSTMStateTuple):
+                    self.state = tuple(map(
+                        lambda fw_state, bw_state: rnn.LSTMStateTuple(
+                            c=tf.concat((fw_state.c, bw_state.c), 1, name="bidirectional_concat_c"),
+                            h=tf.concat((fw_state.h, bw_state.h), 1,
+                                        name="bidirectional_concat_h")),
+                        encoder_fw_state, encoder_bw_state))
                 else:
                     self.state = tf.concat(
                         (encoder_fw_state, encoder_bw_state), 1,
@@ -94,8 +96,4 @@ class DynamicRnnEncoder(object):
                         dtype=tf.float32)
 
                 self.outputs = outputs
-
-                if not isinstance(state, rnn.LSTMStateTuple) and \
-                        isinstance(state, tuple):  # for MultiRNNCell:
-                    state = state[-1]
                 self.state = state
