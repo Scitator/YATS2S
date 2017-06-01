@@ -23,7 +23,6 @@ class DynamicSeq2Seq(object):
         self.decoder = DynamicRnnDecoder(
             encoder_state=self.encoder.state,
             encoder_outputs=self.encoder.outputs,
-            encoder_inputs_length=self.encoder.inputs_length,
             embedding_matrix=self.embeddings.embedding_matrix,
             **decoder_args)
 
