@@ -4,9 +4,7 @@ import pickle
 import json
 from sklearn.model_selection import train_test_split
 import argparse
-from tensorflow.contrib import layers
 from tensorflow.contrib import rnn
-from tensorflow.contrib import seq2seq
 from rstools.utils.batch_utils import iterate_minibatches, files_data_generator, merge_generators
 from rstools.utils.os_utils import unpickle_data, masked_files
 from rstools.tf.training import run_train
@@ -150,7 +148,7 @@ def parse_args():
         type=float,
         default=0.99)
 
-    args, _ = parser.parse_known_args()
+    args = parser.parse_args()
     return args
 
 

@@ -99,10 +99,10 @@ def rnn_encoder_encode_stream(sess, stream, model, batch_size, use_norm=False, l
     for line in stream:
         chunk.append(line)
         if len(chunk) >= batch_size:
-            yield encode_chunk(sess, model, chunk, use_norm)
+            yield encode_chunk(sess, model, chunk, use_norm, lstm_connection=lstm_connection)
             chunk = []
     if len(chunk) > 0:
-        yield encode_chunk(sess, model, chunk, use_norm)
+        yield encode_chunk(sess, model, chunk, use_norm, lstm_connection=lstm_connection)
 
 
 def encoder_pipeline(
@@ -122,12 +122,14 @@ def encoder_pipeline(
         "attention": attention,
     }
     spec_symbols_bias = 3
-    model = create_model(len(token2id) + spec_symbols_bias, embedding_size, encoder_args, decoder_args)
+    model = create_model(
+        len(token2id) + spec_symbols_bias, embedding_size, encoder_args, decoder_args)
 
     saver = tf.train.Saver()
     saver.restore(sess, checkpoint_path)
 
-    for embedding_matr in rnn_encoder_encode_stream(sess, data_stream, model, batch_size, use_norm):
+    for embedding_matr in rnn_encoder_encode_stream(
+            sess, data_stream, model, batch_size, use_norm, lstm_connection=lstm_connection):
         yield embedding_matr
 
 
