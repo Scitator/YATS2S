@@ -29,3 +29,32 @@ class DynamicSeq2Seq(object):
         build_model_optimization(self.encoder, encoder_optimization_args, self.decoder.loss)
         build_model_optimization(self.decoder, decoder_optimization_args)
         build_model_optimization(self.embeddings, embeddings_optimization_args, self.decoder.loss)
+
+
+class DynamicSeq2Symbol(object):
+    def __init__(self,
+                 vocab_size, embedding_size, n_symbols,
+                 encoder_args, decoder_args,
+                 embeddings_optimization_args=None,
+                 encoder_optimization_args=None,
+                 decoder_optimization_args=None):
+        self.embeddings = Embeddings(
+            vocab_size,
+            embedding_size,
+            scope="embeddings")
+
+        self.encoder = DynamicRnnEncoder(
+            embedding_matrix=self.embeddings.embedding_matrix,
+            **encoder_args)
+
+        self.decoder = DynamicRnnDecoder(
+            encoder_state=self.encoder.state,
+            encoder_outputs=self.encoder.outputs,
+            vocab_size=n_symbols,
+            embedding_size=embedding_size,
+            maximum_length=1,
+            **decoder_args)
+
+        build_model_optimization(self.encoder, encoder_optimization_args, self.decoder.loss)
+        build_model_optimization(self.decoder, decoder_optimization_args)
+        build_model_optimization(self.embeddings, embeddings_optimization_args, self.decoder.loss)

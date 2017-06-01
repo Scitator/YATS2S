@@ -9,14 +9,6 @@ class DynamicRnnEncoder(object):
                  special=None):
         assert embedding_matrix is not None \
                or (vocab_size is not None and embedding_size is not None)
-        if embedding_matrix is not None:
-            self.vocab_size, self.embedding_size = embedding_matrix.get_shape().as_list()
-            self.embedding_matrix = embedding_matrix
-        else:
-            self.vocab_size = vocab_size
-            self.embedding_size = embedding_size
-            self.embedding_matrix = create_embedding_matrix(
-                self.vocab_size, self.embedding_size)
 
         self.loss = None
         self.optimizer = None
@@ -30,6 +22,15 @@ class DynamicRnnEncoder(object):
         self.scope = self.special.get("scope", "DynamicRnnEncoder")
         self.reuse_scope = self.special.get("reuse_scope", False)
         with tf.variable_scope(self.scope, self.reuse_scope):
+            if embedding_matrix is not None:
+                self.vocab_size, self.embedding_size = embedding_matrix.get_shape().as_list()
+                self.embedding_matrix = embedding_matrix
+            else:
+                self.vocab_size = vocab_size
+                self.embedding_size = embedding_size
+                self.embedding_matrix = create_embedding_matrix(
+                    self.vocab_size, self.embedding_size)
+
             self._build_graph()
 
     def _build_graph(self):
