@@ -109,7 +109,7 @@ def main():
     args = parse_args()
     ids_bias = 4
     text_vocab, _ = load_vocab("{}/vocab.txt".format(args.data_dir), ids_bias=ids_bias)
-    label_vocab = {"0": 2, "1": 3}
+    label_vocab = {"0": 1, "1": 2}
 
     train_data_gen = labeled_data_generator(
         args.data_dir, text_vocab, label_vocab,
