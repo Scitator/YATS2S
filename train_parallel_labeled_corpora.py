@@ -1,10 +1,6 @@
 import tensorflow as tf
-import numpy as np
-import pickle
-import json
-from sklearn.model_selection import train_test_split
 
-from rstools.utils.batch_utils import iterate_minibatches, files_data_generator, merge_generators
+from rstools.utils.batch_utils import  files_data_generator, merge_generators
 from rstools.tf.training import run_train
 from typical_argparse import parse_args
 from seq2seq.rnn_seq2seq import DynamicSeq2Symbol
@@ -42,30 +38,9 @@ def train_seq2seq(sess, model, train_gen, val_gen=None, run_params=None, n_batch
     return history
 
 
-def seq2seq_iter(data, batch_size, double=False):
-    indices = np.arange(len(data))
-    for batch in iterate_minibatches(indices, batch_size):
-        batch = [data[i] for i in batch]
-        seq, target = zip(*batch)
-        seq, seq_len = time_major_batch(seq)
-        target, target_len = time_major_batch(target)
-        yield seq, seq_len, target, target_len
-        if double:
-            yield target, target_len, seq, seq_len
-
-
-def seq2seq_generator_wrapper(generator, double=False):
-    for batch in generator:
-        seq, target = batch
-        seq, seq_len = time_major_batch(seq)
-        target, target_len = time_major_batch(target)
-        yield seq, seq_len, target, target_len
-        if double:
-            yield target, target_len, seq, seq_len
-
-
 def vocab_encoder_wrapper(vocab, unk_id=2):
     def line_ecoder_fn(line):
+        line = line.split(" ")
         return list(map(lambda t: vocab.get(t, unk_id), line))
     return line_ecoder_fn
 
