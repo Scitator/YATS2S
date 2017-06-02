@@ -1,6 +1,7 @@
 import tensorflow as tf
+from tqdm import tqdm
 
-from rstools.utils.batch_utils import  files_data_generator, merge_generators
+from rstools.utils.batch_utils import files_data_generator, merge_generators
 from rstools.tf.training import run_train
 from typical_argparse import parse_args
 from seq2seq.rnn_seq2seq import DynamicSeq2Symbol
@@ -78,7 +79,8 @@ def labeled_data_generator(
 
     text_batch = []
     label_batch = []
-    for batch_row in merge_generators(files_its):
+
+    for batch_row in tqdm(merge_generators(files_its)):
         text = batch_row[0] + [join_id] + batch_row[1]
         label = batch_row[2]
         text_batch.append(text)
