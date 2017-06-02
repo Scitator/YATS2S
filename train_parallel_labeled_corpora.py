@@ -5,10 +5,9 @@ import json
 from sklearn.model_selection import train_test_split
 
 from rstools.utils.batch_utils import iterate_minibatches, files_data_generator, merge_generators
-from rstools.utils.os_utils import unpickle_data, masked_files
 from rstools.tf.training import run_train
 from typical_argparse import parse_args
-from seq2seq.rnn_seq2seq import DynamicSeq2Seq
+from seq2seq.rnn_seq2seq import DynamicSeq2Symbol
 from seq2seq.batch_utils import time_major_batch
 from seq2seq.training.utils import get_rnn_cell
 
@@ -65,25 +64,88 @@ def seq2seq_generator_wrapper(generator, double=False):
             yield target, target_len, seq, seq_len
 
 
+def vocab_encoder_wrapper(vocab, unk_id=2):
+    def line_ecoder_fn(line):
+        return list(map(lambda t: vocab.get(t, unk_id), line))
+    return line_ecoder_fn
+
+
+def open_file_wrapper(proc_fn):
+    def open_file_fn(filepath):
+        with open(filepath) as fin:
+            for line in fin:
+                line = line.replace("\n", "")
+                yield proc_fn(line)
+    return open_file_fn
+
+
+def labeled_data_generator(
+        data_dir, text_vocab, label_vocab, join_id=3,
+        prefix="train", batch_size=32):
+    source_file = "{}/{}_sources.txt".format(data_dir, prefix)
+    target_file = "{}/{}_targets.txt".format(data_dir, prefix)
+    label_file = "{}/{}_labels.txt".format(data_dir, prefix)
+
+    files_its = [
+        files_data_generator(
+            [source_file],
+            open_file_wrapper(vocab_encoder_wrapper(text_vocab)),
+            batch_size),
+        files_data_generator(
+            [target_file],
+            open_file_wrapper(vocab_encoder_wrapper(text_vocab)),
+            batch_size),
+        files_data_generator(
+            [label_file],
+            open_file_wrapper(vocab_encoder_wrapper(label_vocab)),
+            batch_size)
+    ]
+
+    text_batch = []
+    label_batch = []
+    for batch_row in merge_generators(files_its):
+        text = batch_row[0] + [join_id] + batch_row[1]
+        label = batch_row[2]
+        text_batch.append(text)
+        label_batch.append(label)
+        if len(text_batch) >= batch_size:
+            text, text_len = time_major_batch(text_batch)
+            label, label_len = time_major_batch(label_batch)
+
+            yield text, text_len, label, label_len
+            text_batch = []
+            label_batch = []
+
+
+def load_vocab(filepath, ids_bias=0):
+    tokens = []
+    with open(filepath) as fin:
+        for line in fin:
+            line = line.replace("\n", "")
+            token, freq = line.split()
+            tokens.append(token)
+
+    token2id = {t: i + ids_bias for i, t in enumerate(tokens)}
+    id2token = {i + ids_bias: t for i, t in enumerate(tokens)}
+    return token2id, id2token
+
+
 def main():
     args = parse_args()
+    ids_bias = 4
+    text_vocab, _ = load_vocab("{}/vocab.txt".format(args.data_dir), ids_bias=ids_bias)
+    label_vocab = {"0": 2, "1": 3}
 
-    with open(args.vocab_path) as fin:
-        vocab = fin.readlines()
-    with open(args.token2id_path) as fout:
-        token2id = json.load(fout)
-    with open(args.id2token_path) as fout:
-        id2token = json.load(fout)
-        id2token = {int(key): value for key, value in id2token.items()}
+    train_data_gen = labeled_data_generator(
+        args.data_dir, text_vocab, label_vocab,
+        batch_size=args.batch_size)
 
-    unk_id = 2
-    unk = " "
-    encode = lambda line: list(map(lambda t: token2id.get(t, unk_id), line))
-    decode = lambda line: "".join(list(map(lambda i: id2token.get(i, unk), line)))
+    val_data_gen = labeled_data_generator(
+        args.data_dir, text_vocab, label_vocab,
+        batch_size=args.batch_size, prefix="test")
 
-    vocab_size = len(vocab) + 3
+    vocab_size = len(text_vocab) + ids_bias
     emb_size = args.embedding_size
-    batch_size = args.batch_size
     n_batch = args.n_batch
 
     encoder_cell_params = {"num_units": args.num_units}
@@ -109,82 +171,11 @@ def main():
 
     optimization_args = {
         "decay_steps": args.lr_decay_steps,
-        "lr_decay": args.lr_decay_koef
+        "lr_decay": args.lr_decay_factor
     }
 
-    if "*" in args.from_corpora_path and "*" in args.to_corpora_path:
-        corpora_from_files = np.array(masked_files(args.from_corpora_path))
-        corpora_to_files = np.array(masked_files(args.to_corpora_path))
-        assert len(corpora_from_files) == len(corpora_to_files)
-
-        indices = np.arange(len(corpora_from_files))
-        train_ids, val_ids = train_test_split(indices, test_size=0.2, random_state=42)
-
-        train_from_files = np.array([corpora_from_files[i] for i in train_ids])
-        train_to_files = np.array([corpora_to_files[i] for i in train_ids])
-
-        val_from_files = np.array([corpora_from_files[i] for i in val_ids])
-        val_to_files = np.array([corpora_to_files[i] for i in val_ids])
-
-        train_corpora_from_it = files_data_generator(
-            mask=train_from_files,
-            open_fn=unpickle_data,
-            batch_size=batch_size,
-            files_shuffle=True,
-            data_shuffle=True)
-        train_corpora_to_it = files_data_generator(
-            mask=train_to_files,
-            open_fn=unpickle_data,
-            batch_size=batch_size,
-            files_shuffle=True,
-            data_shuffle=True)
-
-        val_corpora_from_it = files_data_generator(
-            mask=val_from_files,
-            open_fn=unpickle_data,
-            batch_size=batch_size,
-            files_shuffle=True,
-            data_shuffle=True)
-        val_corpora_to_it = files_data_generator(
-            mask=val_to_files,
-            open_fn=unpickle_data,
-            batch_size=batch_size,
-            files_shuffle=True,
-            data_shuffle=True)
-
-        train_generator = merge_generators([train_corpora_from_it, train_corpora_to_it])
-        val_generator = merge_generators([val_corpora_from_it, val_corpora_to_it])
-
-        train_iter = seq2seq_generator_wrapper(train_generator, double=args.double_iter)
-        val_iter = seq2seq_generator_wrapper(val_generator, double=args.double_iter)
-
-        if args.lr_decay_on == "epoch":
-            optimization_args["decay_steps"] *= n_batch
-    else:
-        with open(args.from_corpora_path, "rb") as fout:
-            pph1_enc = pickle.load(fout)
-        with open(args.to_corpora_path, "rb") as fout:
-            pph2_enc = pickle.load(fout)
-
-        indices = np.arange(len(pph1_enc))
-        train_ids, val_ids = train_test_split(indices, test_size=0.2, random_state=42)
-
-        train_input = [pph1_enc[i] for i in train_ids]
-        train_target = [pph2_enc[i] for i in train_ids]
-        train_data = list(zip(train_input, train_target))
-
-        val_input = [pph1_enc[i] for i in val_ids]
-        val_target = [pph2_enc[i] for i in val_ids]
-        val_data = list(zip(val_input, val_target))
-
-        train_iter = seq2seq_iter(train_data, batch_size, double=args.double_iter)
-        val_iter = seq2seq_iter(val_data, batch_size, double=args.double_iter)
-
-        if args.lr_decay_on == "epoch":
-            optimization_args["decay_steps"] *= len(train_data) / batch_size
-
-    model = DynamicSeq2Seq(
-        vocab_size, emb_size,
+    model = DynamicSeq2Symbol(
+        vocab_size, emb_size, len(label_vocab) + 2,
         encoder_args, decoder_args,
         optimization_args,
         optimization_args,
@@ -202,8 +193,8 @@ def main():
         sess.run(tf.global_variables_initializer())
         history = train_seq2seq(
             sess, model,
-            train_iter,
-            val_iter,
+            train_data_gen,
+            val_data_gen,
             run_params,
             n_batch)
 

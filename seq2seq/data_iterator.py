@@ -1,6 +1,5 @@
 import threading
 
-import numpy as np
 import tensorflow as tf
 
 
@@ -12,10 +11,7 @@ def load_generic_text(fname, process_fn):
             yield data
 
 
-class TextReader(object):
-    """Generic background text reader that preprocesses text files
-    and enqueues them into a TensorFlow queue."""
-
+class IteratorQueue(object):
     def __init__(self,
                  iterator,
                  coord,

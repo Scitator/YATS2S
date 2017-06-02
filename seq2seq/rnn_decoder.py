@@ -9,7 +9,7 @@ class DynamicRnnDecoder(object):
                  maximum_length=150,
                  attention=False,
                  embedding_matrix=None, vocab_size=None, embedding_size=None,
-                 special=None):
+                 special=None, defaults=None):
         assert embedding_matrix is not None \
                or (vocab_size is not None and embedding_size is not None)
 
@@ -40,7 +40,7 @@ class DynamicRnnDecoder(object):
                 self.embedding_matrix = create_embedding_matrix(
                     self.vocab_size, self.embedding_size)
 
-            self._build_graph()
+            self._build_graph(defaults)
             self._build_loss()
 
     @property
@@ -50,16 +50,27 @@ class DynamicRnnDecoder(object):
         else:
             return self.cell.output_size
 
-    def _build_graph(self):
+    def _build_graph(self, defaults=None):
         # required only for training
-        self.targets = tf.placeholder(
-            shape=(None, None),
-            dtype=tf.int32,
-            name="decoder_inputs")
-        self.targets_length = tf.placeholder(
-            shape=(None,),
-            dtype=tf.int32,
-            name="decoder_inputs_length")
+        if defaults is None:
+            self.targets = tf.placeholder(
+                shape=(None, None),
+                dtype=tf.int32,
+                name="decoder_inputs")
+            self.targets_length = tf.placeholder(
+                shape=(None,),
+                dtype=tf.int32,
+                name="decoder_inputs_length")
+        else:
+            default_targets, default_targets_length = defaults
+            self.targets = tf.placeholder_with_default(
+                default_targets,
+                shape=(None, None),
+                name="decoder_inputs")
+            self.targets_length = tf.placeholder_with_default(
+                default_targets_length,
+                shape=(None,),
+                name="decoder_inputs_length")
         self.global_step = tf.Variable(0, name="global_step", trainable=False)
 
         with tf.name_scope("DecoderTrainFeed"):

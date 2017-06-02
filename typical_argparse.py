@@ -35,7 +35,7 @@ def parse_args():
         default=2)
 
     parser.add_argument(
-        "--residual_connection",
+        "--residual_connections",
         action="store_true",
         default=False)
     parser.add_argument(

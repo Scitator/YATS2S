@@ -6,7 +6,7 @@ from seq2seq.embeddings import create_embedding_matrix
 class DynamicRnnEncoder(object):
     def __init__(self, cell, bidirectional=False,
                  embedding_matrix=None, vocab_size=None, embedding_size=None,
-                 special=None):
+                 special=None, defaults=None):
         assert embedding_matrix is not None \
                or (vocab_size is not None and embedding_size is not None)
 
@@ -31,17 +31,29 @@ class DynamicRnnEncoder(object):
                 self.embedding_matrix = create_embedding_matrix(
                     self.vocab_size, self.embedding_size)
 
-            self._build_graph()
+            self._build_graph(defaults)
 
-    def _build_graph(self):
-        self.inputs = tf.placeholder(
-            shape=(None, None),
-            dtype=tf.int32,
-            name="encoder_inputs")
-        self.inputs_length = tf.placeholder(
-            shape=(None,),
-            dtype=tf.int32,
-            name="encoder_inputs_length")
+    def _build_graph(self, defaults=None):
+        if defaults is None:
+            self.inputs = tf.placeholder(
+                shape=(None, None),
+                dtype=tf.int32,
+                name="encoder_inputs")
+            self.inputs_length = tf.placeholder(
+                shape=(None,),
+                dtype=tf.int32,
+                name="encoder_inputs_length")
+        else:
+            default_inputs, default_inputs_length = defaults
+            self.inputs = tf.placeholder_with_default(
+                default_inputs,
+                shape=(None, None),
+                name="encoder_inputs")
+            self.inputs_length = tf.placeholder_with_default(
+                default_inputs_length,
+                shape=(None,),
+                name="encoder_inputs_length")
+
         self.global_step = tf.Variable(0, name="global_step", trainable=False)
 
         with tf.variable_scope("embedding") as scope:
