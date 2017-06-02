@@ -64,6 +64,10 @@ def parse_args():
         "--log_dir",
         type=str,
         default="./logs")
+    parser.add_argument(
+        "--checkpoint_every",
+        type=int,
+        default=-1)
 
     parser.add_argument(
         "--lr_decay_on",

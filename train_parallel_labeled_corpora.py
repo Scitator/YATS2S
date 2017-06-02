@@ -186,7 +186,8 @@ def main():
 
     run_params = {
         "n_epochs": args.n_epochs,
-        "log_dir": args.log_dir
+        "log_dir": args.log_dir,
+        "checkpoint_every": args.checkpoint_every
     }
 
     with tf.Session(config=tf.ConfigProto(gpu_options=gpu_options)) as sess:
