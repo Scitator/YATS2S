@@ -89,7 +89,8 @@ class DynamicRnnEncoder(object):
                         and isinstance(encoder_fw_state[0], rnn.LSTMStateTuple):
                     self.state = tuple(map(
                         lambda fw_state, bw_state: rnn.LSTMStateTuple(
-                            c=tf.concat((fw_state.c, bw_state.c), 1, name="bidirectional_concat_c"),
+                            c=tf.concat((fw_state.c, bw_state.c), 1,
+                                        name="bidirectional_concat_c"),
                             h=tf.concat((fw_state.h, bw_state.h), 1,
                                         name="bidirectional_concat_h")),
                         encoder_fw_state, encoder_bw_state))

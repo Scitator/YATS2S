@@ -73,34 +73,38 @@ class DynamicRnnDecoder(object):
                 name="decoder_inputs_length")
         self.global_step = tf.Variable(0, name="global_step", trainable=False)
 
-        with tf.name_scope("DecoderTrainFeed"):
-            sequence_size, batch_size = tf.unstack(tf.shape(self.targets))
+        sequence_size, batch_size = tf.unstack(tf.shape(self.targets))
+        if self.special.get("predict_sequence", True):
+            with tf.name_scope("DecoderTrainFeed"):
+                EOS_SLICE = tf.ones([1, batch_size], dtype=tf.int32) * self.EOS
+                PAD_SLICE = tf.ones([1, batch_size], dtype=tf.int32) * self.PAD
 
-            EOS_SLICE = tf.ones([1, batch_size], dtype=tf.int32) * self.EOS
-            PAD_SLICE = tf.ones([1, batch_size], dtype=tf.int32) * self.PAD
+                self.train_inputs = tf.concat([EOS_SLICE, self.targets], axis=0)
+                self.train_length = self.targets_length + 1
 
-            self.train_inputs = tf.concat([EOS_SLICE, self.targets], axis=0)
-            self.train_length = self.targets_length + 1
+                train_targets = tf.concat([self.targets, PAD_SLICE], axis=0)
+                train_targets_seq_len, _ = tf.unstack(tf.shape(train_targets))
+                train_targets_eos_mask = tf.one_hot(
+                    self.train_length - 1,
+                    train_targets_seq_len,
+                    on_value=self.EOS, off_value=self.PAD,
+                    dtype=tf.int32)
+                train_targets_eos_mask = tf.transpose(train_targets_eos_mask, [1, 0])
 
-            train_targets = tf.concat([self.targets, PAD_SLICE], axis=0)
-            train_targets_seq_len, _ = tf.unstack(tf.shape(train_targets))
-            train_targets_eos_mask = tf.one_hot(
-                self.train_length - 1,
-                train_targets_seq_len,
-                on_value=self.EOS, off_value=self.PAD,
-                dtype=tf.int32)
-            train_targets_eos_mask = tf.transpose(train_targets_eos_mask, [1, 0])
+                # hacky way using one_hot to put EOS symbol at the end of target sequence
+                train_targets = tf.add(
+                    train_targets, train_targets_eos_mask)
 
-            # hacky way using one_hot to put EOS symbol at the end of target sequence
-            train_targets = tf.add(
-                train_targets, train_targets_eos_mask)
+                self.train_targets = train_targets
+        else:
+            self.train_inputs = self.targets
+            self.train_targets = self.targets
+            self.train_length = self.targets_length
 
-            self.train_targets = train_targets
-
-            self.loss_weights = tf.ones([
-                batch_size,
-                tf.reduce_max(self.train_length)],
-                dtype=tf.float32, name="loss_weights")
+        self.loss_weights = tf.ones([
+            batch_size,
+            tf.reduce_max(self.train_length)],
+            dtype=tf.float32, name="loss_weights")
 
         with tf.variable_scope("embedding") as scope:
             self.inputs_embedded = tf.nn.embedding_lookup(
@@ -188,12 +192,34 @@ class DynamicRnnDecoder(object):
                 self.inference_logits, axis=-1,
                 name="inference_prediction")
             self.inference_prediction_probabilities = tf.nn.softmax(
-                self.train_logits, dim=-1,
+                self.inference_logits, dim=-1,
                 name="inference_prediction_probabilities")
 
     def _build_loss(self):
         self.train_logits_seq = tf.transpose(self.train_logits, [1, 0, 2])
         self.train_targets_seq = tf.transpose(self.train_targets, [1, 0])
-        self.unreg_loss = self.loss = seq2seq.sequence_loss(
-            logits=self.train_logits_seq, targets=self.train_targets_seq,
-            weights=self.loss_weights)
+        loss_type = self.special.get("loss_type", "cross_entropy")
+
+        if loss_type == "cross_entropy":
+            self.unreg_loss = self.loss = seq2seq.sequence_loss(
+                logits=self.train_logits_seq, targets=self.train_targets_seq,
+                weights=self.loss_weights)
+        elif loss_type == "hinge":
+            self.train_logits_seq = tf.squeeze(self.train_logits_seq, [1])
+            self.train_targets_seq = tf.squeeze(self.train_targets_seq, [1])
+            self.unreg_loss = self.loss = tf.losses.hinge_loss(
+                labels=tf.cast(tf.one_hot(self.train_targets_seq, self.vocab_size), tf.float32),
+                logits=self.train_logits_seq)
+        elif loss_type == "contrastive":
+            from seq2seq.contrib.losses import contrastive_loss
+            margin = self.special.get("contrastive_margin", 1.0)
+            self.train_logits_seq = tf.squeeze(self.train_logits_seq, [1])
+            self.train_targets_seq = tf.squeeze(self.train_targets_seq, [1])
+            self.train_prediction_probabilities_seq = tf.nn.softmax(
+                self.train_logits_seq, dim=-1,
+                name="train_prediction_probabilities_seq")
+            self.unreg_loss = self.loss = contrastive_loss(
+                labels=tf.cast(tf.one_hot(self.train_targets_seq, self.vocab_size), tf.float32),
+                distances=self.train_prediction_probabilities_seq,
+                margin=margin)
+

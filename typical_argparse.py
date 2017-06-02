@@ -68,6 +68,10 @@ def parse_args():
         "--checkpoint_every",
         type=int,
         default=-1)
+    parser.add_argument(
+        "--loss_type",
+        type=str,
+        default="cross_entropy")
 
     parser.add_argument(
         "--lr_decay_on",

@@ -142,6 +142,7 @@ def main():
             residual_connections=args.residual_connections,
             residual_dense=args.residual_dense),
         "attention": args.attention,
+        "special": {"predict_sequence": False, "loss_type": args.loss_type, "PAD": 0, "EOS": 0}
     }
 
     optimization_args = {
@@ -150,7 +151,7 @@ def main():
     }
 
     model = DynamicSeq2Symbol(
-        vocab_size, emb_size, len(label_vocab) + 2,
+        vocab_size, emb_size, len(label_vocab) + 1,
         encoder_args, decoder_args,
         optimization_args,
         optimization_args,
