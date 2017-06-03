@@ -15,6 +15,9 @@ def parse_args():
         "--gpu_option",
         type=float,
         default=0.45)
+    parser.add_argument(
+        "--checkpoint",
+        type=str)
 
     parser.add_argument(
         "--embedding_size",
@@ -71,7 +74,7 @@ def parse_args():
     parser.add_argument(
         "--checkpoint_every",
         type=int,
-        default=-1)
+        default=1)
     parser.add_argument(
         "--loss_type",
         type=str,
