@@ -9,7 +9,11 @@ from seq2seq.batch_utils import time_major_batch
 from seq2seq.training.utils import get_rnn_cell
 
 
-def train_seq2seq(sess, model, train_gen, val_gen=None, run_params=None, n_batch=-1):
+def train_seq2seq(
+        sess, model,
+        train_gen, val_gen=None,
+        run_params=None,
+        n_batch=-1, n_batch_val=-1):
     train_params = {
         "run_keys": [
             model.decoder.loss,
@@ -27,7 +31,7 @@ def train_seq2seq(sess, model, train_gen, val_gen=None, run_params=None, n_batch
             "result_keys": ["val_unreg_loss"],
             "feed_keys": [model.encoder.inputs, model.encoder.inputs_length,
                           model.decoder.targets, model.decoder.targets_length],
-            "n_batch": n_batch
+            "n_batch": n_batch_val
         }
 
     history = run_train(
@@ -43,6 +47,7 @@ def vocab_encoder_wrapper(vocab, unk_id=2):
     def line_ecoder_fn(line):
         line = line.split(" ")
         return list(map(lambda t: vocab.get(t, unk_id), line))
+
     return line_ecoder_fn
 
 
@@ -52,6 +57,7 @@ def open_file_wrapper(proc_fn):
             for line in fin:
                 line = line.replace("\n", "")
                 yield proc_fn(line)
+
     return open_file_fn
 
 
@@ -124,6 +130,7 @@ def main():
     vocab_size = len(text_vocab) + ids_bias
     emb_size = args.embedding_size
     n_batch = args.n_batch
+    n_batch_val = args.n_batch_test
 
     encoder_cell_params = {"num_units": args.num_units}
     decoder_cell_params = {"num_units": args.num_units + args.num_units * int(args.bidirectional)}
@@ -175,7 +182,8 @@ def main():
             train_data_gen,
             val_data_gen,
             run_params,
-            n_batch)
+            n_batch=n_batch,
+            n_batch_val=n_batch_val)
 
 
 if __name__ == "__main__":

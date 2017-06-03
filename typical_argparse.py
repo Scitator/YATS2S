@@ -61,6 +61,10 @@ def parse_args():
         type=int,
         default=-1)
     parser.add_argument(
+        "--n_batch_test",
+        type=int,
+        default=-1)
+    parser.add_argument(
         "--log_dir",
         type=str,
         default="./logs")
