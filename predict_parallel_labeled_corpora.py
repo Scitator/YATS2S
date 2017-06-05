@@ -2,7 +2,8 @@ import tensorflow as tf
 import numpy as np
 from tqdm import tqdm
 import sys
-from rstools.utils.batch_utils import files_data_generator, merge_generators
+from rstools.utils.batch_utils import files_data_iterator, merge_generators
+from rstools.utils.os_utils import pickle_data
 from typical_argparse import parse_args
 from seq2seq.rnn_seq2seq import DynamicSeq2Symbol
 from seq2seq.batch_utils import time_major_batch
@@ -34,11 +35,11 @@ def labeled_data_generator(
     target_file = "{}/{}_targets.txt".format(data_dir, prefix)
 
     files_its = [
-        files_data_generator(
+        files_data_iterator(
             [source_file],
             open_file_wrapper(vocab_encoder_wrapper(text_vocab)),
             batch_size),
-        files_data_generator(
+        files_data_iterator(
             [target_file],
             open_file_wrapper(vocab_encoder_wrapper(text_vocab)),
             batch_size),
@@ -54,6 +55,9 @@ def labeled_data_generator(
 
             yield text, text_len
             text_batch = []
+    if len(text_batch) >= 0:
+        text, text_len = time_major_batch(text_batch)
+        yield text, text_len
 
 
 def load_vocab(filepath, ids_bias=0):
@@ -73,7 +77,8 @@ def main():
     args = parse_args()
     ids_bias = 4
     text_vocab, _ = load_vocab("{}/vocab.txt".format(args.data_dir), ids_bias=ids_bias)
-    label_vocab = {"0": 1, "1": 2}
+    labels_ids_bias = 2
+    label_vocab = {"0": 2, "1": 3}
 
     pred_data_gen = labeled_data_generator(
         args.data_dir, text_vocab,
@@ -101,11 +106,10 @@ def main():
             residual_connections=args.residual_connections,
             residual_dense=args.residual_dense),
         "attention": args.attention,
-        "special": {"predict_sequence": False, "loss_type": args.loss_type, "PAD": 0, "EOS": 0}
     }
 
     model = DynamicSeq2Symbol(
-        vocab_size, emb_size, len(label_vocab) + 1,
+        vocab_size, emb_size, len(label_vocab) + labels_ids_bias,
         encoder_args, decoder_args)
 
     gpu_option = args.gpu_option
@@ -126,7 +130,10 @@ def main():
                     model.encoder.inputs_length: text_len
                 })
             predictions.append(batch_prediction)
-    predictions = np.vsplit(predictions)
+
+    pickle_data(predictions, "predictions.pkl")
+
+    predictions = np.vstack(predictions)
     np.save("predictions.npz", predictions)
 
 if __name__ == "__main__":

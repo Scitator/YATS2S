@@ -52,7 +52,7 @@ class DynamicSeq2Symbol(object):
             encoder_outputs=self.encoder.outputs,
             vocab_size=n_symbols,
             embedding_size=embedding_size,
-            maximum_length=0,
+            maximum_length=1,
             **decoder_args)
 
         build_model_optimization(self.encoder, encoder_optimization_args, self.decoder.loss)

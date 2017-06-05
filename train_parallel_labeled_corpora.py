@@ -115,9 +115,10 @@ def load_vocab(filepath, ids_bias=0):
 
 def main():
     args = parse_args()
-    ids_bias = 4
-    text_vocab, _ = load_vocab("{}/vocab.txt".format(args.data_dir), ids_bias=ids_bias)
-    label_vocab = {"0": 1, "1": 2}
+    text_ids_bias = 4
+    text_vocab, _ = load_vocab("{}/vocab.txt".format(args.data_dir), ids_bias=text_ids_bias)
+    labels_ids_bias = 2
+    label_vocab = {"0": 2, "1": 3}
 
     train_data_gen = labeled_data_generator(
         args.data_dir, text_vocab, label_vocab,
@@ -127,7 +128,7 @@ def main():
         args.data_dir, text_vocab, label_vocab,
         batch_size=args.batch_size, prefix="test")
 
-    vocab_size = len(text_vocab) + ids_bias
+    vocab_size = len(text_vocab) + text_ids_bias
     emb_size = args.embedding_size
     n_batch = args.n_batch
     n_batch_val = args.n_batch_test
@@ -151,7 +152,6 @@ def main():
             residual_connections=args.residual_connections,
             residual_dense=args.residual_dense),
         "attention": args.attention,
-        "special": {"predict_sequence": False, "loss_type": args.loss_type, "PAD": 0, "EOS": 0}
     }
 
     optimization_args = {
@@ -160,7 +160,7 @@ def main():
     }
 
     model = DynamicSeq2Symbol(
-        vocab_size, emb_size, len(label_vocab) + 1,
+        vocab_size, emb_size, len(label_vocab) + labels_ids_bias,
         encoder_args, decoder_args,
         optimization_args,
         optimization_args,
