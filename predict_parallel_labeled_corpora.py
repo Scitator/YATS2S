@@ -133,8 +133,9 @@ def main():
 
     pickle_data(predictions, "predictions.pkl")
 
+    predictions = list(map(lambda x: x[0, :, 2:], predictions))
     predictions = np.vstack(predictions)
-    np.save("predictions.npz", predictions)
+    np.save("predictions.npy", predictions)
 
 if __name__ == "__main__":
     main()

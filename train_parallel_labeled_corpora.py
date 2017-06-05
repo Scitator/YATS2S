@@ -167,7 +167,7 @@ def main():
         optimization_args)
 
     gpu_option = args.gpu_option
-    gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=gpu_option)
+    gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=gpu_option, allow_growth=True)
 
     run_params = {
         "n_epochs": args.n_epochs,
