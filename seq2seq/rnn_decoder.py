@@ -65,12 +65,11 @@ class DynamicRnnDecoder(object):
             default_targets, default_targets_length = defaults
             self.targets = tf.placeholder_with_default(
                 default_targets,
-                shape=(None, None),
-                name="decoder_inputs")
+                shape=(None, None))
+            self.targets = tf.transpose(self.targets, [1, 0])
             self.targets_length = tf.placeholder_with_default(
                 default_targets_length,
-                shape=(None,),
-                name="decoder_inputs_length")
+                shape=(None,))
         self.global_step = tf.Variable(0, name="global_step", trainable=False)
 
         sequence_size, batch_size = tf.unstack(tf.shape(self.targets))

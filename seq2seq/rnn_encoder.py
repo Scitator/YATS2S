@@ -47,12 +47,11 @@ class DynamicRnnEncoder(object):
             default_inputs, default_inputs_length = defaults
             self.inputs = tf.placeholder_with_default(
                 default_inputs,
-                shape=(None, None),
-                name="encoder_inputs")
+                shape=(None, None))
+            self.inputs = tf.transpose(self.inputs, [1, 0])
             self.inputs_length = tf.placeholder_with_default(
                 default_inputs_length,
-                shape=(None,),
-                name="encoder_inputs_length")
+                shape=(None,))
 
         self.global_step = tf.Variable(0, name="global_step", trainable=False)
 

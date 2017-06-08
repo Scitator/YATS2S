@@ -23,7 +23,8 @@ class IteratorQueue(object):
 
         self.placeholders = placeholders
 
-        self.queue = tf.FIFOQueue(
+        # or typical queue
+        self.queue = tf.PaddingFIFOQueue(
             queue_size,
             list(map(lambda x: x.dtype, self.placeholders)),
             shapes=list(map(lambda x: x.shape.as_list(), self.placeholders)))
