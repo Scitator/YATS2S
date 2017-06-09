@@ -1,5 +1,5 @@
 import threading
-
+import itertools
 import tensorflow as tf
 
 
@@ -13,11 +13,11 @@ def load_generic_text(fname, process_fn):
 
 class IteratorQueue(object):
     def __init__(self,
-                 iterator,
+                 iterator_fn,
                  coord,
                  placeholders,
                  queue_size=1024):
-        self.iterator = iterator
+        self.iterator_fn = iterator_fn
         self.coord = coord
         self.threads = []
 
@@ -38,7 +38,8 @@ class IteratorQueue(object):
     def thread_main(self, sess):
         stop = False
         while not stop:
-            for data in self.iterator:
+            thread_iterator = self.iterator_fn()
+            for data in thread_iterator:
                 if self.coord.should_stop():
                     self.stop_threads()
                     stop = True
@@ -53,7 +54,7 @@ class IteratorQueue(object):
 
     def start_threads(self, sess, n_threads=1):
         for _ in range(n_threads):
-            thread = threading.Thread(target=self.thread_main, args=(sess,))
+            thread = threading.Thread(target=self.thread_main, args=(sess, ))
             thread.daemon = True  # Thread will close when parent quits.
             thread.start()
             self.threads.append(thread)
