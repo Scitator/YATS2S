@@ -7,22 +7,12 @@ from tensorflow.contrib.rnn import LSTMStateTuple
 
 
 class DynamicRnnDecoder(object):
-    def __init__(self, cell, encoder_state, encoder_outputs, encoder_inputs_length,
+    def __init__(self, cell, encoder_state, encoder_outputs, maximum_length=150,
                  attention=False, training_mode="greedy", decoding_mode="greedy", beam_width=5,
                  embedding_matrix=None, vocab_size=None, embedding_size=None,
                  special=None):
         assert embedding_matrix is not None \
                or (vocab_size is not None and embedding_size is not None)
-        # @TODO: should work without all encoder stuff ?
-        if embedding_matrix is not None:
-            self.vocab_size, self.embedding_size = embedding_matrix.get_shape().as_list()
-            self.embedding_matrix = embedding_matrix
-        else:
-            self.vocab_size = vocab_size
-            self.embedding_size = embedding_size
-            self.embedding_matrix = create_embedding_matrix(
-                self.vocab_size, self.embedding_size)
-
         self.loss = None
         self.optimizer = None
         self.train_op = None
@@ -35,7 +25,7 @@ class DynamicRnnDecoder(object):
 
         # @TODO: should be optimal
         self.encoder_outputs = encoder_outputs
-        self.encoder_inputs_length = encoder_inputs_length
+        self.maximum_length = maximum_length
         self.attention = attention
 
         self.special = special or {}
@@ -45,6 +35,7 @@ class DynamicRnnDecoder(object):
         self.scope = self.special.get("scope", "DynamicRnnDecoder")
         self.reuse_scope = self.special.get("reuse_scope", False)
         with tf.variable_scope(self.scope, self.reuse_scope):
+            self._build_embeddings()
             self._build_graph()
             self._build_loss()
 
@@ -63,6 +54,16 @@ class DynamicRnnDecoder(object):
         else:
             batch_size, _ = tf.unstack(tf.shape(self.encoder_state))
             return batch_size
+    
+    def _build_embeddings(self):
+         if embedding_matrix is not None:
+            self.vocab_size, self.embedding_size = embedding_matrix.get_shape().as_list()
+            self.embedding_matrix = embedding_matrix
+        else:
+            self.vocab_size = vocab_size
+            self.embedding_size = embedding_size
+            self.embedding_matrix = create_embedding_matrix(
+                self.vocab_size, self.embedding_size)
 
     def _build_graph(self):
         # required only for training

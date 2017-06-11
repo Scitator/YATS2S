@@ -6,20 +6,11 @@ from seq2seq.embeddings import create_embedding_matrix
 class DynamicRnnEncoder(object):
     def __init__(self, cell, bidirectional=False,
                  embedding_matrix=None, vocab_size=None, embedding_size=None,
-                 special=None):
+                 special=None, defaults=None):
         assert embedding_matrix is not None \
                or (vocab_size is not None and embedding_size is not None)
-        if embedding_matrix is not None:
-            self.vocab_size, self.embedding_size = embedding_matrix.get_shape().as_list()
-            self.embedding_matrix = embedding_matrix
-        else:
-            self.vocab_size = vocab_size
-            self.embedding_size = embedding_size
-            self.embedding_matrix = create_embedding_matrix(
-                self.vocab_size, self.embedding_size)
 
         self.loss = None
-        self.optimizer = None
         self.train_op = None
         self.cell = cell
         self.bidirectional = bidirectional
@@ -30,18 +21,39 @@ class DynamicRnnEncoder(object):
         self.scope = self.special.get("scope", "DynamicRnnEncoder")
         self.reuse_scope = self.special.get("reuse_scope", False)
         with tf.variable_scope(self.scope, self.reuse_scope):
-            self._build_graph()
+            self._build_embeddings()
+            self._build_graph(defaults)
+    
+    def _build_embeddings(self):
+         if embedding_matrix is not None:
+            self.vocab_size, self.embedding_size = embedding_matrix.get_shape().as_list()
+            self.embedding_matrix = embedding_matrix
+        else:
+            self.vocab_size = vocab_size
+            self.embedding_size = embedding_size
+            self.embedding_matrix = create_embedding_matrix(
+                self.vocab_size, self.embedding_size)
 
-    def _build_graph(self):
-        self.inputs = tf.placeholder(
-            shape=(None, None),
-            dtype=tf.int32,
-            name="encoder_inputs")
-        self.inputs_length = tf.placeholder(
-            shape=(None,),
-            dtype=tf.int32,
-            name="encoder_inputs_length")
-        self.global_step = tf.Variable(0, name="global_step", trainable=False)
+    def _build_graph(self, defaults):
+        if defaults is None:
+            self.inputs = tf.placeholder(
+                shape=(None, None),
+                dtype=tf.int32,
+                name="encoder_inputs")
+            self.inputs_length = tf.placeholder(
+                shape=(None,),
+                dtype=tf.int32,
+                name="encoder_inputs_length")
+        else:
+            default_inputs, default_inputs_length = defaults
+            self.inputs = tf.placeholder_with_default(
+                default_inputs,
+                shape=(None, None))
+            # cause it in [batch_size, time_len] mode, we need
+            self.inputs = tf.transpose(self.inputs, [1, 0])
+            self.inputs_length = tf.placeholder_with_default(
+                default_inputs_length,
+                shape=(None,))
 
         with tf.variable_scope("embedding") as scope:
             self.inputs_embedded = tf.nn.embedding_lookup(
@@ -66,18 +78,21 @@ class DynamicRnnEncoder(object):
                     (encoder_fw_outputs, encoder_bw_outputs), 2,
                     name="bidirectional_output_concat")
 
-                # @TODO: need to check correctness
-                if not isinstance(encoder_fw_state, rnn.LSTMStateTuple) and \
-                        isinstance(encoder_fw_state, tuple):  # for MultiRNNCell:
-                    encoder_fw_state = encoder_fw_state[-1]
-                    encoder_bw_state = encoder_bw_state[-1]
-
                 if isinstance(encoder_fw_state, rnn.LSTMStateTuple):  # for LSTM cell
                     state_c = tf.concat(
                         (encoder_fw_state.c, encoder_bw_state.c), 1, name="bidirectional_concat_c")
                     state_h = tf.concat(
                         (encoder_fw_state.h, encoder_bw_state.h), 1, name="bidirectional_concat_h")
                     self.state = rnn.LSTMStateTuple(c=state_c, h=state_h)
+                elif isinstance(encoder_fw_state, tuple) \
+                        and isinstance(encoder_fw_state[0], rnn.LSTMStateTuple):
+                    self.state = tuple(map(
+                        lambda fw_state, bw_state: rnn.LSTMStateTuple(
+                            c=tf.concat((fw_state.c, bw_state.c), 1,
+                                        name="bidirectional_concat_c"),
+                            h=tf.concat((fw_state.h, bw_state.h), 1,
+                                        name="bidirectional_concat_h")),
+                        encoder_fw_state, encoder_bw_state))
                 else:
                     self.state = tf.concat(
                         (encoder_fw_state, encoder_bw_state), 1,
@@ -93,8 +108,4 @@ class DynamicRnnEncoder(object):
                         dtype=tf.float32)
 
                 self.outputs = outputs
-
-                if not isinstance(state, rnn.LSTMStateTuple) and \
-                        isinstance(state, tuple):  # for MultiRNNCell:
-                    state = state[-1]
                 self.state = state
