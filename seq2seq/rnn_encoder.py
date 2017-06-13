@@ -27,12 +27,13 @@ class DynamicRnnEncoder(object):
             self._build_embeddings()
             self._build_graph(defaults)
 
-            self.global_step = tf.get_variable(
-                "global_step", [],
-                trainable=False,
-                dtype=tf.int64,
-                initializer=tf.constant_initializer(
-                    0, dtype=tf.int64))
+            self.global_step = tf.contrib.framework.get_global_step()
+            # self.global_step = tf.get_variable(
+            #     "global_step", [],
+            #     trainable=False,
+            #     dtype=tf.int64,
+            #     initializer=tf.constant_initializer(
+            #         0, dtype=tf.int64))
     
     def _build_embeddings(self):
         if self.embedding_matrix is not None:
