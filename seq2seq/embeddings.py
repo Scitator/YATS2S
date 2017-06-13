@@ -2,6 +2,8 @@ import numpy as np
 import tensorflow as tf
 
 
+from tensorflow.contrib.learn.python.learn.learn_io.generator_io import generator_input_fn
+
 def create_embedding_matrix(vocab_size, embedding_size, scope=None, reuse=False):
     with tf.variable_scope(scope or "embeddings", reuse=reuse) as scope:
         # Uniform(-sqrt(3), sqrt(3)) has variance ~= 1.
@@ -17,15 +19,22 @@ def create_embedding_matrix(vocab_size, embedding_size, scope=None, reuse=False)
 
 
 class Embeddings(object):
-    def __init__(self, vocab_size, embedding_size, scope):
+    def __init__(self, vocab_size, embedding_size, special):
         self.loss = None
-        self.optimizer = None
         self.train_op = None
 
-        self.scope = scope
         self.vocab_size = vocab_size
         self.embedding_size = embedding_size
+        self.special = special
 
-        self.global_step = tf.Variable(0, name="global_step", trainable=False)
-        self.embedding_matrix = create_embedding_matrix(
-            self.vocab_size, self.embedding_size, scope=self.scope)
+        self.scope = self.special.get("scope", "Embeddings")
+        self.reuse_scope = self.special.get("reuse_scope", False)
+        with tf.variable_scope(self.scope, self.reuse_scope):
+            self.embedding_matrix = create_embedding_matrix(
+                self.vocab_size, self.embedding_size, scope=self.scope)
+            self.global_step = tf.get_variable(
+                "global_step", [],
+                trainable=False,
+                dtype=tf.int64,
+                initializer=tf.constant_initializer(
+                    0, dtype=tf.int64))

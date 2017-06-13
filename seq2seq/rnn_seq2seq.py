@@ -1,7 +1,33 @@
+import tensorflow as tf
+from tensorflow.contrib.layers import optimize_loss
 from seq2seq.embeddings import Embeddings
 from seq2seq.rnn_encoder import DynamicRnnEncoder
 from seq2seq.rnn_decoder import DynamicRnnDecoder
 from rstools.tf.optimization import build_model_optimization
+
+
+def build_model_optimization(model, optimization_args=None, loss=None):
+    loss = model.loss if model.loss is not None else loss
+    assert loss is not None
+    optimization_args = optimization_args or {}
+
+    # global_step = tf.contrib.framework.get_global_step()
+
+    learning_rate_decay_fn = lambda learning_rate, global_step: \
+        tf.train.exponential_decay(
+            learning_rate, global_step,
+            decay_steps=optimization_args.get("decay_steps", 100000),
+            decay_rate=optimization_args.get("decay_rate", 0.99))
+
+    # very magic fn!
+    model.train_op = tf.contrib.layers.optimize_loss(
+        loss=loss,
+        global_step=model.global_step,
+        learning_rate=optimization_args.get("learning_rate", 1e-4),
+        optimizer=tf.train.AdamOptimizer,
+        learning_rate_decay_fn=learning_rate_decay_fn,
+        clip_gradients=optimization_args.get("clip_gradients", 10.0),
+        variables=tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=model.scope))
 
 
 class DynamicSeq2Seq(object):
@@ -14,7 +40,7 @@ class DynamicSeq2Seq(object):
         self.embeddings = Embeddings(
             vocab_size,
             embedding_size,
-            scope="embeddings")
+            special={"scope": "embeddings"})
 
         self.encoder = DynamicRnnEncoder(
             embedding_matrix=self.embeddings.embedding_matrix,
@@ -23,7 +49,6 @@ class DynamicSeq2Seq(object):
         self.decoder = DynamicRnnDecoder(
             encoder_state=self.encoder.state,
             encoder_outputs=self.encoder.outputs,
-            encoder_inputs_length=self.encoder.inputs_length,
             embedding_matrix=self.embeddings.embedding_matrix,
             **decoder_args)
 

@@ -19,7 +19,7 @@ def time_major_batch(inputs, max_sequence_length=None):
             time steps in each input sequence
     """
 
-    sequence_lengths = [len(seq) for seq in inputs]
+    sequence_lengths = np.array([len(seq) for seq in inputs], dtype=np.int32)
     batch_size = len(inputs)
 
     if max_sequence_length is None:

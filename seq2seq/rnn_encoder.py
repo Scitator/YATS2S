@@ -9,6 +9,9 @@ class DynamicRnnEncoder(object):
                  special=None, defaults=None):
         assert embedding_matrix is not None \
                or (vocab_size is not None and embedding_size is not None)
+        self.embedding_matrix = embedding_matrix
+        self.vocab_size = vocab_size
+        self.embedding_size = embedding_size
 
         self.loss = None
         self.train_op = None
@@ -23,14 +26,18 @@ class DynamicRnnEncoder(object):
         with tf.variable_scope(self.scope, self.reuse_scope):
             self._build_embeddings()
             self._build_graph(defaults)
+
+            self.global_step = tf.get_variable(
+                "global_step", [],
+                trainable=False,
+                dtype=tf.int64,
+                initializer=tf.constant_initializer(
+                    0, dtype=tf.int64))
     
     def _build_embeddings(self):
-         if embedding_matrix is not None:
-            self.vocab_size, self.embedding_size = embedding_matrix.get_shape().as_list()
-            self.embedding_matrix = embedding_matrix
+        if self.embedding_matrix is not None:
+            self.vocab_size, self.embedding_size = self.embedding_matrix.get_shape().as_list()
         else:
-            self.vocab_size = vocab_size
-            self.embedding_size = embedding_size
             self.embedding_matrix = create_embedding_matrix(
                 self.vocab_size, self.embedding_size)
 
@@ -45,15 +52,19 @@ class DynamicRnnEncoder(object):
                 dtype=tf.int32,
                 name="encoder_inputs_length")
         else:
-            default_inputs, default_inputs_length = defaults
-            self.inputs = tf.placeholder_with_default(
-                default_inputs,
-                shape=(None, None))
+            # self.inputs = tf.placeholder_with_default(
+            #     defaults["inputs"],
+            #     shape=(None, None),
+            #     name="encoder_inputs"
+            #     )
+            self.inputs = defaults["inputs"]
             # cause it in [batch_size, time_len] mode, we need
             self.inputs = tf.transpose(self.inputs, [1, 0])
-            self.inputs_length = tf.placeholder_with_default(
-                default_inputs_length,
-                shape=(None,))
+            # self.inputs_length = tf.placeholder_with_default(
+            #     defaults["inputs_length"],
+            #     shape=(None,),
+            #     name="encoder_inputs_length")
+            self.inputs_length = defaults["inputs_length"]
 
         with tf.variable_scope("embedding") as scope:
             self.inputs_embedded = tf.nn.embedding_lookup(
@@ -66,13 +77,13 @@ class DynamicRnnEncoder(object):
                  (encoder_fw_state,
                   encoder_bw_state)) = (
                     tf.nn.bidirectional_dynamic_rnn(
-                        cell_fw=self.cell,
-                        cell_bw=self.cell,
+                        cell_fw=self.cell[0] if isinstance(self.cell, tuple) else self.cell,
+                        cell_bw=self.cell[1] if isinstance(self.cell, tuple) else self.cell,
                         inputs=self.inputs_embedded,
                         sequence_length=self.inputs_length,
                         time_major=True,
                         dtype=tf.float32)
-                )
+                )  # @TODO: check tuple correctness
 
                 self.outputs = tf.concat(
                     (encoder_fw_outputs, encoder_bw_outputs), 2,
@@ -98,6 +109,7 @@ class DynamicRnnEncoder(object):
                         (encoder_fw_state, encoder_bw_state), 1,
                         name="bidirectional_state_concat")
         else:
+            # import pdb; pdb.set_trace()
             with tf.variable_scope("Encoder") as scope:
                 outputs, state = \
                     tf.nn.dynamic_rnn(

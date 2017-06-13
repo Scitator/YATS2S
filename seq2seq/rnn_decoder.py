@@ -10,11 +10,14 @@ class DynamicRnnDecoder(object):
     def __init__(self, cell, encoder_state, encoder_outputs, maximum_length=150,
                  attention=False, training_mode="greedy", decoding_mode="greedy", beam_width=5,
                  embedding_matrix=None, vocab_size=None, embedding_size=None,
-                 special=None):
+                 special=None, defaults=None):
         assert embedding_matrix is not None \
                or (vocab_size is not None and embedding_size is not None)
+        self.embedding_matrix = embedding_matrix
+        self.vocab_size = vocab_size
+        self.embedding_size = embedding_size
+
         self.loss = None
-        self.optimizer = None
         self.train_op = None
         self.cell = cell
         self.encoder_state = encoder_state
@@ -36,53 +39,74 @@ class DynamicRnnDecoder(object):
         self.reuse_scope = self.special.get("reuse_scope", False)
         with tf.variable_scope(self.scope, self.reuse_scope):
             self._build_embeddings()
-            self._build_graph()
+            self._build_graph(defaults)
+
+            self.global_step = tf.get_variable(
+                "global_step", [],
+                trainable=False,
+                dtype=tf.int64,
+                initializer=tf.constant_initializer(
+                    0, dtype=tf.int64))
+
             self._build_loss()
 
     @property
     def decoder_hidden_units(self):
         if isinstance(self.cell.output_size, tuple):
-            return self.cell.output_size[0]  # LSTM support? need to test
+            return self.cell.output_size[0]
         else:
             return self.cell.output_size
 
     @property
     def decoder_batch_size(self):
-        if isinstance(self.encoder_state, LSTMStateTuple):
-            batch_size, _ = tf.unstack(tf.shape(self.encoder_state[0]))
+        if isinstance(self.encoder_state, tuple):
+            real_cell = self.encoder_state[0]
+        else:
+            real_cell = self.encoder_state
+
+        if isinstance(real_cell, LSTMStateTuple):
+            batch_size, _ = tf.unstack(tf.shape(real_cell[0]))
             return batch_size
         else:
-            batch_size, _ = tf.unstack(tf.shape(self.encoder_state))
+            batch_size, _ = tf.unstack(tf.shape(real_cell))
             return batch_size
     
     def _build_embeddings(self):
-         if embedding_matrix is not None:
-            self.vocab_size, self.embedding_size = embedding_matrix.get_shape().as_list()
-            self.embedding_matrix = embedding_matrix
+        if self.embedding_matrix is not None:
+            self.vocab_size, self.embedding_size = self.embedding_matrix.get_shape().as_list()
         else:
-            self.vocab_size = vocab_size
-            self.embedding_size = embedding_size
             self.embedding_matrix = create_embedding_matrix(
                 self.vocab_size, self.embedding_size)
 
-    def _build_graph(self):
+    def _build_graph(self, defaults=None):
         # required only for training
-        self.targets = tf.placeholder(
-            shape=(None, None),
-            dtype=tf.int32,
-            name="decoder_inputs")
-        self.targets_length = tf.placeholder(
-            shape=(None,),
-            dtype=tf.int32,
-            name="decoder_inputs_length")
-        self.global_step = tf.Variable(0, name="global_step", trainable=False)
+        if defaults is None:
+            self.targets = tf.placeholder(
+                shape=(None, None),
+                dtype=tf.int32,
+                name="decoder_inputs")
+            self.targets_length = tf.placeholder(
+                shape=(None,),
+                dtype=tf.int32,
+                name="decoder_inputs_length")
+        else:
+            # self.targets = tf.placeholder_with_default(
+            #     defaults["targets"],
+            #     shape=(None, None),
+            #     name="decoder_inputs")
+            self.targets = defaults["targets"]
+            self.targets = tf.transpose(self.targets, [1, 0])
+            # self.targets_length = tf.placeholder_with_default(
+            #     defaults["targets_length"],
+            #     shape=(None,),
+            #     name="decoder_inputs_length")
+            self.targets_length = defaults["targets_length"]
 
         with tf.name_scope("DecoderTrainFeed"):
             target_sequence_size, target_batch_size = tf.unstack(tf.shape(self.targets))
 
             EOS_SLICE = tf.ones([1, target_batch_size], dtype=tf.int32) * self.EOS
             PAD_SLICE = tf.ones([1, target_batch_size], dtype=tf.int32) * self.PAD
-
             self.train_inputs = tf.concat([EOS_SLICE, self.targets], axis=0)
             self.train_length = self.targets_length + 1
 
@@ -100,7 +124,6 @@ class DynamicRnnDecoder(object):
                 train_targets, train_targets_eos_mask)
 
             self.train_targets = train_targets
-
             self.loss_weights = tf.ones([
                 target_batch_size,
                 tf.reduce_max(self.train_length)],
@@ -111,7 +134,6 @@ class DynamicRnnDecoder(object):
                 self.embedding_matrix, self.train_inputs)
 
         with tf.variable_scope("Decoder") as scope:
-
             # def logits_fn(outputs):
                 # return layers.dense(outputs, self.vocab_size, name="logits_fn")
 
@@ -132,8 +154,8 @@ class DynamicRnnDecoder(object):
                 if self.attention:
                     inference_attention_mechanism = create_attention_mechanism(
                         num_units=self.decoder_hidden_units,
-                        memory=attention_states,
-                        memory_sequence_length=self.encoder_inputs_length)  # @TODO: needed?
+                        memory=attention_states)
+                        # memory_sequence_length=self.maximum_length)  # @TODO: needed?
 
                     inference_cell = seq2seq.AttentionWrapper(
                         cell=self.cell,
@@ -177,13 +199,13 @@ class DynamicRnnDecoder(object):
 
                 if self.attention:
                     attention_states = seq2seq.tile_batch(attention_states, multiplier=beam_width)
-                    beam_sequence_length = seq2seq.tile_batch(
-                        self.encoder_inputs_length, multiplier=beam_width)
+                    # beam_sequence_length = seq2seq.tile_batch(
+                    #     self.maximum_length, multiplier=beam_width)
 
                     inference_attention_mechanism = create_attention_mechanism(
                         num_units=self.decoder_hidden_units,
-                        memory=attention_states,
-                        memory_sequence_length=beam_sequence_length)
+                        memory=attention_states)
+                        # memory_sequence_length=beam_sequence_length)
 
                     inference_cell = seq2seq.AttentionWrapper(
                         cell=self.cell,
@@ -249,7 +271,7 @@ class DynamicRnnDecoder(object):
                 seq2seq.dynamic_decode(
                     decoder=inference_decoder,
                     output_time_major=True,
-                    maximum_iterations=tf.reduce_max(self.encoder_inputs_length) + 3,
+                    maximum_iterations=self.maximum_length,
                     scope="inference_decoder")
 
             if self.decoding_mode == "greedy":
