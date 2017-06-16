@@ -2,8 +2,6 @@ import numpy as np
 import tensorflow as tf
 
 
-from tensorflow.contrib.learn.python.learn.learn_io.generator_io import generator_input_fn
-
 def create_embedding_matrix(vocab_size, embedding_size, scope=None, reuse=False):
     with tf.variable_scope(scope or "embeddings", reuse=reuse) as scope:
         # Uniform(-sqrt(3), sqrt(3)) has variance ~= 1.
