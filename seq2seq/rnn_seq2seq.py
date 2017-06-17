@@ -9,8 +9,6 @@ def build_model_optimization(model, optimization_args=None, loss=None):
     assert loss is not None
     optimization_args = optimization_args or {}
 
-    # global_step = tf.contrib.framework.get_global_step()
-
     learning_rate_decay_fn = lambda learning_rate, global_step: \
         tf.train.exponential_decay(
             learning_rate, global_step,
@@ -52,6 +50,10 @@ class DynamicSeq2Seq(object):
             mode=mode,
             **decoder_args)
 
-        build_model_optimization(self.encoder, encoder_optimization_args, self.decoder.loss)
-        build_model_optimization(self.decoder, decoder_optimization_args)
-        build_model_optimization(self.embeddings, embeddings_optimization_args, self.decoder.loss)
+        if mode == tf.estimator.ModeKeys.TRAIN:
+            build_model_optimization(
+                self.encoder, encoder_optimization_args, self.decoder.loss)
+            build_model_optimization(
+                self.decoder, decoder_optimization_args)
+            build_model_optimization(
+                self.embeddings, embeddings_optimization_args, self.decoder.loss)

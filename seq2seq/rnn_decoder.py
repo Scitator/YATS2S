@@ -127,6 +127,7 @@ class DynamicRnnDecoder(object):
                 train_targets = tf.add(train_targets, train_targets_eos_mask)
 
                 self.train_targets = train_targets
+                # @TODO: make something interesting with sequential loss
                 self.loss_weights = tf.ones([
                     target_batch_size,
                     tf.reduce_max(self.train_length)],
@@ -197,8 +198,7 @@ class DynamicRnnDecoder(object):
                     seq2seq.dynamic_decode(
                         decoder=train_decoder,
                         output_time_major=False,
-                        maximum_iterations=self.maximum_length,
-                        scope="train_decoder")
+                        maximum_iterations=self.maximum_length)
                 self.train_logits = self.train_outputs
                 self.train_prediction = self.train_sampled_ids
 
@@ -276,8 +276,7 @@ class DynamicRnnDecoder(object):
                     seq2seq.dynamic_decode(
                         decoder=inference_decoder,
                         output_time_major=False,
-                        maximum_iterations=self.maximum_length,
-                        scope="inference_decoder")
+                        maximum_iterations=self.maximum_length)
 
                 if self.decoding_mode == "greedy":
                     (self.inference_outputs, self.inference_sampled_ids) = \
