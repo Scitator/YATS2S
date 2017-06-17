@@ -1,9 +1,7 @@
 import tensorflow as tf
-from tensorflow.contrib.layers import optimize_loss
 from seq2seq.embeddings import Embeddings
 from seq2seq.rnn_encoder import DynamicRnnEncoder
 from seq2seq.rnn_decoder import DynamicRnnDecoder
-from rstools.tf.optimization import build_model_optimization
 
 
 def build_model_optimization(model, optimization_args=None, loss=None):
@@ -36,7 +34,8 @@ class DynamicSeq2Seq(object):
                  encoder_args, decoder_args,
                  embeddings_optimization_args=None,
                  encoder_optimization_args=None,
-                 decoder_optimization_args=None):
+                 decoder_optimization_args=None,
+                 mode="train"):
         self.embeddings = Embeddings(
             vocab_size,
             embedding_size,
@@ -50,6 +49,7 @@ class DynamicSeq2Seq(object):
             encoder_state=self.encoder.state,
             encoder_outputs=self.encoder.outputs,
             embedding_matrix=self.embeddings.embedding_matrix,
+            mode=mode,
             **decoder_args)
 
         build_model_optimization(self.encoder, encoder_optimization_args, self.decoder.loss)

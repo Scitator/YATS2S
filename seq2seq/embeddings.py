@@ -31,9 +31,3 @@ class Embeddings(object):
             self.embedding_matrix = create_embedding_matrix(
                 self.vocab_size, self.embedding_size, scope=self.scope)
             self.global_step = tf.contrib.framework.get_global_step()
-            # self.global_step = tf.get_variable(
-            #     "global_step", [],
-            #     trainable=False,
-            #     dtype=tf.int64,
-            #     initializer=tf.constant_initializer(
-            #         0, dtype=tf.int64))
