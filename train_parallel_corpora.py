@@ -184,7 +184,7 @@ def main():
     # special symbols: PAD, EOS, UNK
     unk_id = 2
     vocab_ids_bias = unk_id + 1
-    vocab = load_vocab(args.vocab_path, ids_bias=vocab_ids_bias)
+    vocab, _ = load_vocab(args.vocab_path, ids_bias=vocab_ids_bias)
     encode = lambda line: list(map(lambda x: vocab.get(x, unk_id), line.split(" ")))
     vocab_size = len(vocab) + vocab_ids_bias
 
