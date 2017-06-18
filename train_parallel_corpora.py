@@ -2,7 +2,7 @@ import numpy as np
 import tensorflow as tf
 import argparse
 
-from seq2seq.rnn_seq2seq import create_seq2seq_experiment
+from seq2seq.rnn_seq2seq import create_seq2seq_experiment_fn
 from seq2seq.input.generator_io import generator_input_fn
 
 
@@ -219,12 +219,12 @@ def main():
         inference_mode=args.inference_mode,
         beam_width=args.beam_width)
 
-    experiments_fn = create_seq2seq_experiment(
+    experiment_fn = create_seq2seq_experiment_fn(
         train_input_fn, val_input_fn,
         args.train_steps, args.eval_steps, args.min_eval_frequency)
 
     tf.contrib.learn.learn_runner.run(
-        experiment_fn=experiments_fn,
+        experiment_fn=experiment_fn,
         run_config=run_config,
         schedule="train_and_evaluate",
         hparams=hparams)

@@ -190,7 +190,7 @@ def create_seq2seq_model(config=None, hparams=None):
         params=hparams)
 
 
-def create_seq2seq_experiment(
+def create_seq2seq_experiment_fn(
         train_input_fn, val_input_fn,
         train_steps, eval_steps, min_eval_frequency):
 
