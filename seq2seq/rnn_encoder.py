@@ -74,7 +74,7 @@ class DynamicRnnEncoder(object):
                         sequence_length=self.inputs_length,
                         time_major=False,
                         dtype=tf.float32)
-                )  # @TODO: check tuple correctness
+                )
 
                 self.outputs = tf.concat(
                     (encoder_fw_outputs, encoder_bw_outputs), 2,

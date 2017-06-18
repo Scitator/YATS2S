@@ -1,6 +1,5 @@
 import tensorflow as tf
 from tensorflow.python.layers.core import Dense
-from tensorflow import layers
 from tensorflow.contrib import seq2seq
 from seq2seq.embeddings import create_embedding_matrix
 from tensorflow.contrib.rnn import LSTMStateTuple

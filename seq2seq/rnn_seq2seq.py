@@ -1,5 +1,6 @@
 import tensorflow as tf
 from seq2seq.embeddings import Embeddings
+from seq2seq.projection import Projection
 from seq2seq.rnn_encoder import DynamicRnnEncoder
 from seq2seq.rnn_decoder import DynamicRnnDecoder
 
@@ -15,7 +16,6 @@ def build_model_optimization(model, optimization_args=None, loss=None):
             decay_steps=optimization_args.get("decay_steps", 100000),
             decay_rate=optimization_args.get("decay_rate", 0.99))
 
-    # very magic fn!
     model.train_op = tf.contrib.layers.optimize_loss(
         loss=loss,
         global_step=model.global_step,
@@ -33,20 +33,41 @@ class DynamicSeq2Seq(object):
                  embeddings_optimization_args=None,
                  encoder_optimization_args=None,
                  decoder_optimization_args=None,
-                 mode="train"):
-        self.embeddings = Embeddings(
-            vocab_size,
-            embedding_size,
-            special={"scope": "embeddings"})
+                 mode=tf.estimator.ModeKeys.TRAIN):
+        same_embeddings = (isinstance(vocab_size, int) and isinstance(embedding_size, int))
+        different_embeddigns = (isinstance(vocab_size, tuple) and isinstance(embedding_size, tuple))
+        assert (same_embeddings or different_embeddigns)
+
+        if same_embeddings:
+            self.embeddings = Embeddings(
+                vocab_size,
+                embedding_size,
+                special={"scope": "embeddings"})
+        elif different_embeddigns:
+            # @TODO: projection ?
+            self.embeddings_from = Embeddings(
+                vocab_size[0],
+                embedding_size[0],
+                special={"scope": "embeddings_from"})
+            self.embeddings_to = Embeddings(
+                vocab_size[1],
+                embedding_size[1],
+                special={"scope": "embeddings_to"})
+        else:
+            raise NotImplementedError()
 
         self.encoder = DynamicRnnEncoder(
-            embedding_matrix=self.embeddings.embedding_matrix,
+            embedding_matrix=self.embeddings.embedding_matrix
+            if same_embeddings
+            else self.embeddings_from.embedding_matrix,
             **encoder_args)
 
         self.decoder = DynamicRnnDecoder(
             encoder_state=self.encoder.state,
             encoder_outputs=self.encoder.outputs,
-            embedding_matrix=self.embeddings.embedding_matrix,
+            embedding_matrix=self.embeddings.embedding_matrix
+            if same_embeddings
+            else self.embeddings_to.embedding_matrix,
             mode=mode,
             **decoder_args)
 
@@ -55,5 +76,20 @@ class DynamicSeq2Seq(object):
                 self.encoder, encoder_optimization_args, self.decoder.loss)
             build_model_optimization(
                 self.decoder, decoder_optimization_args)
-            build_model_optimization(
-                self.embeddings, embeddings_optimization_args, self.decoder.loss)
+            if same_embeddings:
+                build_model_optimization(
+                    self.embeddings, embeddings_optimization_args, self.decoder.loss)
+                self.train_op = tf.group(
+                    self.embeddings.train_op,
+                    self.encoder.train_op,
+                    self.decoder.train_op)
+            else:
+                build_model_optimization(
+                    self.embeddings_from, embeddings_optimization_args, self.decoder.loss)
+                build_model_optimization(
+                    self.embeddings_to, embeddings_optimization_args, self.decoder.loss)
+                self.train_op = tf.group(
+                    self.embeddings_from.train_op,
+                    self.embeddings_to.train_op,
+                    self.encoder.train_op,
+                    self.decoder.train_op)
