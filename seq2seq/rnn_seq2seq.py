@@ -169,7 +169,7 @@ def seq2seq_model(features, labels, mode, params, config):
 
     if mode == tf.estimator.ModeKeys.PREDICT:
         predictions = {
-            "inputs": model.encoder.inputs,
+            # "inputs": model.encoder.inputs,
             "prediction": model.decoder.inference_prediction,
             "score": model.decoder.inference_scores
         }
@@ -188,3 +188,21 @@ def create_seq2seq_model(config=None, hparams=None):
         model_fn=seq2seq_model,
         config=config,
         params=hparams)
+
+
+def create_seq2seq_experiment(
+        train_input_fn, val_input_fn,
+        train_steps, eval_steps, min_eval_frequency):
+
+    def seq2seq_experiment(run_config, hparams):
+        return tf.contrib.learn.Experiment(
+            estimator=create_seq2seq_model(
+                config=run_config,
+                hparams=hparams),
+            train_input_fn=train_input_fn,
+            eval_input_fn=val_input_fn,
+            train_steps=train_steps,
+            eval_steps=eval_steps,
+            min_eval_frequency=min_eval_frequency)
+
+    return seq2seq_experiment
