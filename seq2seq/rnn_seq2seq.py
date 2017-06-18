@@ -2,6 +2,7 @@ import tensorflow as tf
 from seq2seq.embeddings import Embeddings
 from seq2seq.rnn_encoder import DynamicRnnEncoder
 from seq2seq.rnn_decoder import DynamicRnnDecoder
+from seq2seq.training.utils import get_rnn_cell
 
 
 def build_model_optimization(model, optimization_args=None, loss=None):
@@ -67,6 +68,7 @@ class DynamicSeq2Seq(object):
             embedding_matrix=self.embeddings.embedding_matrix
             if same_embeddings
             else self.embeddings_to.embedding_matrix,
+            encoder_inputs_length=self.encoder.inputs_length,
             mode=mode,
             **decoder_args)
 
@@ -92,3 +94,97 @@ class DynamicSeq2Seq(object):
                     self.embeddings_to.train_op,
                     self.encoder.train_op,
                     self.decoder.train_op)
+
+
+def seq2seq_model(features, labels, mode, params, config):
+    encoder_cell_params = dict(
+        cell_class=params.cell,
+        cell_params={"num_units": params.num_units},
+        num_layers=params.num_layers,
+        residual_connections=params.residual_connections,
+        residual_dense=params.residual_dense)
+
+    decoder_cell_params = dict(
+        cell_class=params.cell,
+        cell_params={"num_units": params.num_units + params.num_units * int(params.bidirectional)},
+        num_layers=params.num_layers,
+        residual_connections=params.residual_connections,
+        residual_dense=params.residual_dense)
+
+    if params.cell_num == 1:
+        assert not params.bidirectional
+        encoder_cell = decoder_cell = get_rnn_cell(**encoder_cell_params)
+    elif params.cell_num == 2:
+        encoder_cell = get_rnn_cell(**encoder_cell_params)
+        decoder_cell = get_rnn_cell(**decoder_cell_params)
+    elif params.cell_num == 3:
+        assert params.bidirectional
+        encoder_cell = (
+            get_rnn_cell(**encoder_cell_params),
+            get_rnn_cell(**encoder_cell_params))
+        decoder_cell = get_rnn_cell(**decoder_cell_params)
+    else:
+        raise NotImplementedError()
+
+    encoder_args = {
+        "cell": encoder_cell,
+        "bidirectional": params.bidirectional,
+        "defaults": features
+    }
+
+    decoder_args = {
+        "cell": decoder_cell,
+        "attention": params.attention,
+        "defaults": labels
+    }
+
+    if (mode == tf.estimator.ModeKeys.TRAIN or
+                mode == tf.estimator.ModeKeys.EVAL):
+        decoder_args["training_mode"] = params.training_mode
+        if "scheduled_sampling" in params.training_mode:
+            decoder_args["scheduled_sampling_probability"] = params.scheduled_sampling_probability
+
+    if mode == tf.estimator.ModeKeys.PREDICT:
+        decoder_args["inference_mode"] = params.inference_mode
+        if params.inference_mode == "beam":
+            decoder_args["beam_width"] = params.beam_width
+
+    model = DynamicSeq2Seq(
+        params.vocab_size,
+        params.embedding_size,
+        encoder_args=encoder_args,
+        decoder_args=decoder_args,
+        mode=mode)
+
+    if mode == tf.estimator.ModeKeys.TRAIN:
+        train_op = model.train_op
+    else:
+        train_op = None
+
+    if (mode == tf.estimator.ModeKeys.TRAIN or
+                mode == tf.estimator.ModeKeys.EVAL):
+        loss = model.decoder.loss
+    else:
+        loss = None
+
+    if mode == tf.estimator.ModeKeys.PREDICT:
+        predictions = {
+            "inputs": model.encoder.inputs,
+            "prediction": model.decoder.inference_prediction,
+            "score": model.decoder.inference_scores
+        }
+    else:
+        predictions = None
+
+    return tf.estimator.EstimatorSpec(
+        mode=mode,
+        predictions=predictions,
+        loss=loss,
+        train_op=train_op)
+
+
+def create_seq2seq_model(config=None, hparams=None):
+    return tf.estimator.Estimator(
+        model_fn=seq2seq_model,
+        config=config,
+        params=hparams)

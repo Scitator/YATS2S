@@ -7,7 +7,9 @@ from tensorflow.contrib.rnn import LSTMStateTuple
 
 class DynamicRnnDecoder(object):
     def __init__(self, cell, encoder_state, encoder_outputs, maximum_length=150,
-                 attention=False, training_mode="greedy", decoding_mode="greedy", beam_width=5,
+                 attention=None, encoder_inputs_length=None,
+                 training_mode="greedy", scheduled_sampling_probability=0.0,
+                 inference_mode="greedy", beam_width=1,
                  embedding_matrix=None, vocab_size=None, embedding_size=None,
                  special=None, defaults=None, mode="train"):
         assert embedding_matrix is not None \
@@ -23,13 +25,17 @@ class DynamicRnnDecoder(object):
         self.encoder_state = encoder_state
 
         self.training_mode = training_mode
-        self.decoding_mode = decoding_mode
+        self.scheduled_sampling_probability = tf.constant(
+            scheduled_sampling_probability, shape=(), dtype=tf.float32,
+            name="scheduled_sampling_probability")
+        self.inference_mode = inference_mode
         self.beam_width = beam_width
 
         # @TODO: should be optimal
         self.encoder_outputs = encoder_outputs
         self.maximum_length = maximum_length
-        self.attention = attention
+        self.attention = attention or False
+        self.encoder_inputs_length = encoder_inputs_length
 
         self.special = special or {}
         self.PAD = self.special.get("PAD", 0)
@@ -86,11 +92,6 @@ class DynamicRnnDecoder(object):
                     shape=(None,),
                     dtype=tf.int32,
                     name="decoder_inputs_length")
-                if "scheduled_sampling" in self.training_mode:
-                    self.scheduled_sampling_probability = tf.placeholder(
-                        shape=(),
-                        dtype=tf.float32,
-                        name="scheduled_sampling_probability")
             else:
                 self.targets = tf.placeholder_with_default(
                     defaults["targets"],
@@ -100,11 +101,6 @@ class DynamicRnnDecoder(object):
                     defaults["targets_length"],
                     shape=(None,),
                     name="decoder_inputs_length")
-                if "scheduled_sampling" in self.training_mode:
-                    self.scheduled_sampling_probability = tf.placeholder_with_default(
-                        defaults["scheduled_sampling_probability"],
-                        shape=(),
-                        name="scheduled_sampling_probability")
 
             with tf.name_scope("DecoderTrainFeed"):
                 target_batch_size, target_sequence_size = tf.unstack(tf.shape(self.targets))
@@ -142,14 +138,22 @@ class DynamicRnnDecoder(object):
                 name="decoder_output_layer")
 
             if self.attention:
-                create_attention_mechanism = seq2seq.BahdanauAttention
+                attention_dct = {
+                    "bahdanau": seq2seq.BahdanauAttention,
+                    "luong": seq2seq.LuongAttention,
+                    True: seq2seq.BahdanauAttention
+                }
+                if isinstance(self.attention, str):
+                    self.attention = self.attention.lower()
+                create_attention_mechanism = attention_dct[self.attention]
 
             if (self.mode == tf.estimator.ModeKeys.TRAIN or
                         self.mode == tf.estimator.ModeKeys.EVAL):
                 if self.attention:
                     inference_attention_mechanism = create_attention_mechanism(
                         num_units=self.decoder_hidden_units,
-                        memory=self.encoder_outputs)
+                        memory=self.encoder_outputs,
+                        memory_sequence_length=self.encoder_inputs_length)
 
                     # @TODO: alignment_history?
                     inference_cell = seq2seq.AttentionWrapper(
@@ -202,11 +206,12 @@ class DynamicRnnDecoder(object):
                 self.train_prediction = self.train_sampled_ids
 
             if self.mode == tf.estimator.ModeKeys.PREDICT:
-                if self.decoding_mode == "greedy":
+                if self.inference_mode == "greedy":
                     if self.attention:
                         inference_attention_mechanism = create_attention_mechanism(
                             num_units=self.decoder_hidden_units,
-                            memory=self.encoder_outputs)
+                            memory=self.encoder_outputs,
+                            memory_sequence_length=self.encoder_inputs_length)
 
                         inference_cell = seq2seq.AttentionWrapper(
                             cell=self.cell,
@@ -231,11 +236,18 @@ class DynamicRnnDecoder(object):
                         helper=inference_helper,
                         initial_state=inference_initial_state,
                         output_layer=decoder_output_layer)
-                elif self.decoding_mode == "beam":
+                elif self.inference_mode == "beam":
                     if isinstance(self.encoder_state, LSTMStateTuple):
                         inference_initial_state = LSTMStateTuple(
                             seq2seq.tile_batch(self.encoder_state[0], multiplier=self.beam_width),
                             seq2seq.tile_batch(self.encoder_state[1], multiplier=self.beam_width))
+                    elif isinstance(self.encoder_state, tuple) \
+                        and isinstance(self.encoder_state[0], LSTMStateTuple):
+                        inference_initial_state = tuple(map(
+                            lambda state: LSTMStateTuple(
+                                seq2seq.tile_batch(state[0], multiplier=self.beam_width),
+                                seq2seq.tile_batch(state[1], multiplier=self.beam_width)),
+                            self.encoder_state))
                     else:
                         inference_initial_state = seq2seq.tile_batch(
                             self.encoder_state, multiplier=self.beam_width)
@@ -244,16 +256,19 @@ class DynamicRnnDecoder(object):
                         attention_states = seq2seq.tile_batch(
                             self.encoder_outputs, multiplier=self.beam_width)
 
+                        attention_memory_length = seq2seq.tile_batch(
+                            self.encoder_inputs_length, multiplier=self.beam_width)
+
                         inference_attention_mechanism = create_attention_mechanism(
                             num_units=self.decoder_hidden_units,
-                            memory=attention_states)
+                            memory=attention_states,
+                            memory_sequence_length=attention_memory_length)
 
                         inference_cell = seq2seq.AttentionWrapper(
                             cell=self.cell,
                             attention_mechanism=inference_attention_mechanism,
                             attention_layer_size=self.decoder_hidden_units)
 
-                        # @TODO: bad code, need renaming
                         zero_initial_state = inference_cell.zero_state(
                             dtype=tf.float32, batch_size=self.decoder_batch_size * self.beam_width)
                         inference_initial_state = zero_initial_state.clone(
@@ -267,6 +282,7 @@ class DynamicRnnDecoder(object):
                         start_tokens=[self.EOS] * self.decoder_batch_size * self.beam_width,
                         end_token=self.EOS,
                         initial_state=inference_initial_state,
+                        output_layer=decoder_output_layer,
                         beam_width=self.beam_width)
                 else:
                     raise NotImplementedError()
@@ -277,17 +293,18 @@ class DynamicRnnDecoder(object):
                         output_time_major=False,
                         maximum_iterations=self.maximum_length)
 
-                if self.decoding_mode == "greedy":
+                if self.inference_mode == "greedy":
                     (self.inference_outputs, self.inference_sampled_ids) = \
                         (final_outputs.rnn_output, final_outputs.sample_id)
                     self.inference_scores = tf.ones(shape=[self.decoder_batch_size, 1])
-                elif self.decoding_mode == "beam":
+                    self.inference_sampled_ids = tf.expand_dims(self.inference_sampled_ids, -1)
+                elif self.inference_mode == "beam":
                     (self.inference_outputs, self.inference_sampled_ids) = \
                         (final_outputs.beam_search_decoder_output,
                          final_outputs.predicted_ids)
-                    self.inference_scores = tf.squeeze(self.inference_outputs.scores, axis=1)
-                    self.inference_sampled_ids = tf.squeeze(self.inference_sampled_ids, axis=1)
+                    self.inference_scores = self.inference_outputs.scores
                 self.inference_logits = self.inference_outputs
+                # [batch_size, time_len, beam_size]
                 self.inference_prediction = self.inference_sampled_ids
 
     def _build_loss(self):
