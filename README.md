@@ -16,6 +16,8 @@ So, here it is:
 * vocabulary trick: joint or different for source and target?
 * scheduled_sampling
 * in-graph beam search
+* TF.Estimators
+* tensorboard integration
 * and finally: best-practices for data input pipelines, let's make it quick!
 
 ### Inspired by:
