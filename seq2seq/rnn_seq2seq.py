@@ -1,6 +1,5 @@
 import tensorflow as tf
 from seq2seq.embeddings import Embeddings
-from seq2seq.projection import Projection
 from seq2seq.rnn_encoder import DynamicRnnEncoder
 from seq2seq.rnn_decoder import DynamicRnnDecoder
 
