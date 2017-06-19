@@ -1,6 +1,7 @@
 import numpy as np
 import tensorflow as tf
 import argparse
+import json
 
 from seq2seq.rnn_seq2seq import create_seq2seq_experiment_fn
 from seq2seq.input.generator_io import generator_input_fn
@@ -20,7 +21,6 @@ def load_vocab(filepath, ids_bias=0):
 
 
 def file_data_generator_py(filepath, line_encode_fn):
-
     def generator():
         with open(filepath) as fin:
             for line in fin:
@@ -231,6 +231,9 @@ def main():
     experiment_fn = create_seq2seq_experiment_fn(
         train_input_fn, val_input_fn,
         args.train_steps, args.eval_steps, args.min_eval_frequency)
+
+    with open("{}/hparams.json".format(args.log_dir), "w") as fout:
+        json.dump(hparams.values(), fout)
 
     tf.contrib.learn.learn_runner.run(
         experiment_fn=experiment_fn,
