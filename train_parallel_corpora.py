@@ -2,9 +2,15 @@ import numpy as np
 import tensorflow as tf
 import argparse
 import json
+import os
 
 from seq2seq.rnn_seq2seq import create_seq2seq_experiment_fn
 from seq2seq.input.generator_io import generator_input_fn
+
+
+def create_if_need(path):
+    if not os.path.exists(path):
+        os.makedirs(path)
 
 
 def load_vocab(filepath, ids_bias=0):
@@ -232,6 +238,7 @@ def main():
         train_input_fn, val_input_fn,
         args.train_steps, args.eval_steps, args.min_eval_frequency)
 
+    create_if_need(args.log_dir)
     with open("{}/hparams.json".format(args.log_dir), "w") as fout:
         json.dump(hparams.values(), fout)
 
