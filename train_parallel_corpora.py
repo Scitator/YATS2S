@@ -26,13 +26,15 @@ def file_data_generator_py(filepath, line_encode_fn):
             for line in fin:
                 inputs, targets = line.replace("\n", "").split("\t")
                 inputs = np.array(line_encode_fn(inputs), dtype=np.int32)
+                inputs_length = np.array(len(inputs), dtype=np.int32)
                 targets = np.array(line_encode_fn(targets), dtype=np.int32)
+                targets_length = np.array(len(targets), dtype=np.int32)
 
                 yield {
                     "inputs": inputs,
-                    "inputs_length": len(inputs),
+                    "inputs_length": inputs_length,
                     "targets": targets,
-                    "targets_length": len(targets)
+                    "targets_length": targets_length
                 }
 
     return generator
@@ -84,7 +86,7 @@ def parse_args():
     parser.add_argument(
         "--attention",
         type=str,
-        default="bahdanau",
+        default=None,
         choices=["bahdanau", "luong"])
     parser.add_argument(
         "--residual_connections",
@@ -104,7 +106,7 @@ def parse_args():
     parser.add_argument(
         "--scheduled_sampling_probability",
         type=float,
-        default=0.5)
+        default=0.0)
 
     # inference params [WIP]
     parser.add_argument(
@@ -153,20 +155,23 @@ def parse_args():
         type=int,
         default=int(1e3))
 
-    # optimization params
+    # optimization
     parser.add_argument(
-        "--lr_decay_on",
-        type=str,
-        default="epoch",
-        choices=["epoch", "batch"])
+        "--learning_rate",
+        type=float,
+        default=1e-4)
     parser.add_argument(
         "--lr_decay_steps",
         type=int,
-        default=1)
+        default=100000)
     parser.add_argument(
         "--lr_decay_koef",
         type=float,
         default=0.99)
+    parser.add_argument(
+        "--gradient_clip",
+        type=float,
+        default=10.0)
 
     # other run params
     parser.add_argument(
@@ -215,6 +220,10 @@ def main():
         residual_connections=args.residual_connections,
         residual_dense=args.residual_dense,
         training_mode=args.training_mode,
+        learning_rate=args.learning_rate,
+        lr_decay_steps=args.lr_decay_steps,
+        lr_decay_koef=args.lr_decay_koef,
+        gradient_clip=args.gradient_clip,
         scheduled_sampling_probability=args.scheduled_sampling_probability,
         inference_mode=args.inference_mode,
         beam_width=args.beam_width)

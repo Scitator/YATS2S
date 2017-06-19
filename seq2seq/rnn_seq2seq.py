@@ -138,6 +138,16 @@ def seq2seq_model(features, labels, mode, params, config):
         "defaults": labels
     }
 
+    if mode == tf.estimator.ModeKeys.TRAIN:
+        optimization_args = {
+            "learning_rate": params.learning_rate,
+            "decay_steps": params.lr_decay_steps,
+            "decay_rate": params.lr_decay_koef,
+            "clip_gradients": params.gradient_clip
+        }
+    else:
+        optimization_args = None
+
     if (mode == tf.estimator.ModeKeys.TRAIN or
                 mode == tf.estimator.ModeKeys.EVAL):
         decoder_args["training_mode"] = params.training_mode
@@ -154,6 +164,9 @@ def seq2seq_model(features, labels, mode, params, config):
         params.embedding_size,
         encoder_args=encoder_args,
         decoder_args=decoder_args,
+        embeddings_optimization_args=optimization_args,
+        encoder_optimization_args=optimization_args,
+        decoder_optimization_args=optimization_args,
         mode=mode)
 
     if mode == tf.estimator.ModeKeys.TRAIN:
