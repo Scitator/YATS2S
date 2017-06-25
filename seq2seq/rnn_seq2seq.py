@@ -1,4 +1,5 @@
 import tensorflow as tf
+from tensorflow.python.layers.core import Dense
 from seq2seq.embeddings import Embeddings
 from seq2seq.rnn_encoder import DynamicRnnEncoder
 from seq2seq.rnn_decoder import DynamicRnnDecoder
@@ -6,7 +7,7 @@ from seq2seq.training.utils import get_rnn_cell
 
 
 def build_model_optimization(model, optimization_args=None, loss=None):
-    loss = model.loss if model.loss is not None else loss
+    loss = loss if loss is not None else model.loss
     assert loss is not None
     optimization_args = optimization_args or {}
 
@@ -30,6 +31,7 @@ class DynamicSeq2Seq(object):
     def __init__(self,
                  vocab_size, embedding_size,
                  encoder_args, decoder_args,
+                 cell_num=2,
                  embeddings_optimization_args=None,
                  encoder_optimization_args=None,
                  decoder_optimization_args=None,
@@ -44,7 +46,6 @@ class DynamicSeq2Seq(object):
                 embedding_size,
                 special={"scope": "embeddings"})
         elif different_embeddigns:
-            # @TODO: projection ?
             self.embeddings_from = Embeddings(
                 vocab_size[0],
                 embedding_size[0],
@@ -56,10 +57,19 @@ class DynamicSeq2Seq(object):
         else:
             raise NotImplementedError()
 
+        if encoder_args.get("lm_regularization", False) and same_embeddings and cell_num == 1:
+            with tf.variable_scope("Decoder"):
+                output_layer = Dense(
+                    vocab_size,
+                    name="output_layer")
+            encoder_args["output_layer"] = output_layer
+            decoder_args["output_layer"] = output_layer
+
         self.encoder = DynamicRnnEncoder(
             embedding_matrix=self.embeddings.embedding_matrix
             if same_embeddings
             else self.embeddings_from.embedding_matrix,
+            mode=mode,
             **encoder_args)
 
         self.decoder = DynamicRnnDecoder(
@@ -71,15 +81,17 @@ class DynamicSeq2Seq(object):
             encoder_inputs_length=self.encoder.inputs_length,
             mode=mode,
             **decoder_args)
+        import pdb; pdb.set_trace()
 
         if mode == tf.estimator.ModeKeys.TRAIN:
             build_model_optimization(
-                self.encoder, encoder_optimization_args, self.decoder.loss)
+                self.encoder, encoder_optimization_args, self.decoder.loss + self.encoder.loss)
             build_model_optimization(
                 self.decoder, decoder_optimization_args)
             if same_embeddings:
                 build_model_optimization(
-                    self.embeddings, embeddings_optimization_args, self.decoder.loss)
+                    self.embeddings, embeddings_optimization_args,
+                    self.decoder.loss + self.encoder.loss)
                 self.train_op = tf.group(
                     self.embeddings.train_op,
                     self.encoder.train_op,
@@ -129,6 +141,7 @@ def seq2seq_model(features, labels, mode, params, config):
     encoder_args = {
         "cell": encoder_cell,
         "bidirectional": params.bidirectional,
+        "lm_regularization": params.lm_regularization,
         "defaults": features
     }
 
@@ -164,6 +177,7 @@ def seq2seq_model(features, labels, mode, params, config):
         params.embedding_size,
         encoder_args=encoder_args,
         decoder_args=decoder_args,
+        cell_num=params.cell_num,
         embeddings_optimization_args=optimization_args,
         encoder_optimization_args=optimization_args,
         decoder_optimization_args=optimization_args,
@@ -206,7 +220,6 @@ def create_seq2seq_model(config=None, hparams=None):
 def create_seq2seq_experiment_fn(
         train_input_fn, val_input_fn,
         train_steps, eval_steps, min_eval_frequency):
-
     def seq2seq_experiment(run_config, hparams):
         return tf.contrib.learn.Experiment(
             estimator=create_seq2seq_model(
