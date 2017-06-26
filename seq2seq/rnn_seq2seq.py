@@ -57,14 +57,6 @@ class DynamicSeq2Seq(object):
         else:
             raise NotImplementedError()
 
-        if encoder_args.get("lm_regularization", False) and same_embeddings and cell_num == 1:
-            with tf.variable_scope("Decoder"):
-                output_layer = Dense(
-                    vocab_size,
-                    name="output_layer")
-            encoder_args["output_layer"] = output_layer
-            decoder_args["output_layer"] = output_layer
-
         self.encoder = DynamicRnnEncoder(
             embedding_matrix=self.embeddings.embedding_matrix
             if same_embeddings
@@ -81,31 +73,31 @@ class DynamicSeq2Seq(object):
             encoder_inputs_length=self.encoder.inputs_length,
             mode=mode,
             **decoder_args)
-        import pdb; pdb.set_trace()
 
         if mode == tf.estimator.ModeKeys.TRAIN:
-            build_model_optimization(
-                self.encoder, encoder_optimization_args, self.decoder.loss + self.encoder.loss)
-            build_model_optimization(
-                self.decoder, decoder_optimization_args)
-            if same_embeddings:
+            with tf.variable_scope("Optimization"):
                 build_model_optimization(
-                    self.embeddings, embeddings_optimization_args,
-                    self.decoder.loss + self.encoder.loss)
-                self.train_op = tf.group(
-                    self.embeddings.train_op,
-                    self.encoder.train_op,
-                    self.decoder.train_op)
-            else:
+                    self.encoder, encoder_optimization_args, self.decoder.loss)
                 build_model_optimization(
-                    self.embeddings_from, embeddings_optimization_args, self.decoder.loss)
-                build_model_optimization(
-                    self.embeddings_to, embeddings_optimization_args, self.decoder.loss)
-                self.train_op = tf.group(
-                    self.embeddings_from.train_op,
-                    self.embeddings_to.train_op,
-                    self.encoder.train_op,
-                    self.decoder.train_op)
+                    self.decoder, decoder_optimization_args)
+                if same_embeddings:
+                    build_model_optimization(
+                        self.embeddings, embeddings_optimization_args,
+                        self.decoder.loss)
+                    self.train_op = tf.group(
+                        self.embeddings.train_op,
+                        self.encoder.train_op,
+                        self.decoder.train_op)
+                else:
+                    build_model_optimization(
+                        self.embeddings_from, embeddings_optimization_args, self.decoder.loss)
+                    build_model_optimization(
+                        self.embeddings_to, embeddings_optimization_args, self.decoder.loss)
+                    self.train_op = tf.group(
+                        self.embeddings_from.train_op,
+                        self.embeddings_to.train_op,
+                        self.encoder.train_op,
+                        self.decoder.train_op)
 
 
 def seq2seq_model(features, labels, mode, params, config):
@@ -140,8 +132,7 @@ def seq2seq_model(features, labels, mode, params, config):
 
     encoder_args = {
         "cell": encoder_cell,
-        "bidirectional": params.bidirectional,
-        "lm_regularization": params.lm_regularization,
+        "bidirectional": params.bidirectional,\
         "defaults": features
     }
 

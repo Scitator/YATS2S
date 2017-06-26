@@ -12,7 +12,6 @@ class DynamicRnnDecoder(object):
                  training_mode="greedy", scheduled_sampling_probability=0.0,
                  inference_mode="greedy", beam_width=1,
                  embedding_matrix=None, vocab_size=None, embedding_size=None,
-                 output_layer=None,
                  special=None, defaults=None, mode="train"):
         assert embedding_matrix is not None \
                or (vocab_size is not None and embedding_size is not None)
@@ -38,7 +37,6 @@ class DynamicRnnDecoder(object):
         self.maximum_length = maximum_length
         self.attention = attention or False
         self.encoder_inputs_length = encoder_inputs_length
-        self.output_layer = output_layer
 
         self.special = special or {}
         self.PAD = self.special.get("PAD", 0)
@@ -118,10 +116,9 @@ class DynamicRnnDecoder(object):
                     self.embedding_matrix, self.train_inputs)
 
         with tf.variable_scope("Decoder"):
-            if self.output_layer is None:
-                self.output_layer = Dense(
-                    self.vocab_size,
-                    name="output_layer")
+            self.output_layer = Dense(
+                self.vocab_size,
+                name="output_layer")
 
             if (self.mode == tf.estimator.ModeKeys.TRAIN or
                         self.mode == tf.estimator.ModeKeys.EVAL):

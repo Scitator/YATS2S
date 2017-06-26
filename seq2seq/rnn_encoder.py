@@ -9,7 +9,6 @@ from seq2seq.dynamic_decode import dynamic_rnn_decode, dynamic_targets
 class DynamicRnnEncoder(object):
     def __init__(self, cell, bidirectional=False,
                  embedding_matrix=None, vocab_size=None, embedding_size=None,
-                 lm_regularization=False, output_layer=None,
                  special=None, defaults=None, mode="train"):
         assert embedding_matrix is not None \
                or (vocab_size is not None and embedding_size is not None)
@@ -22,8 +21,6 @@ class DynamicRnnEncoder(object):
         self.train_op = None
         self.cell = cell
         self.bidirectional = bidirectional
-        self.lm_regularization = lm_regularization
-        self.output_layer = output_layer
         self.special = special or {}
         self.PAD = self.special.get("PAD", 0)
         self.EOS = self.special.get("EOS", 1)
@@ -35,10 +32,6 @@ class DynamicRnnEncoder(object):
             self._build_graph(defaults)
 
             self.global_step = tf.contrib.framework.get_global_step()
-
-            if (self.mode == tf.estimator.ModeKeys.TRAIN or
-                        self.mode == tf.estimator.ModeKeys.EVAL):
-                self._build_loss()
 
     def _build_embeddings(self):
         if self.embedding_matrix is not None:
@@ -121,50 +114,3 @@ class DynamicRnnEncoder(object):
 
                 self.outputs = outputs
                 self.state = state
-
-        if self.lm_regularization:
-            if self.output_layer is None:
-                with tf.variable_scope("Decoder"):
-                    self.output_layer = Dense(
-                        self.vocab_size,
-                        name="output_layer")
-
-            if self.mode == tf.estimator.ModeKeys.TRAIN or \
-                            self.mode == tf.estimator.ModeKeys.EVAL:
-                with tf.name_scope("DecoderTrainFeed"):
-                    self.train_inputs, self.train_targets, self.train_length, self.loss_weights = \
-                        dynamic_targets(
-                            targets=self.inputs,
-                            targets_length=self.inputs_length,
-                            pad_token=self.PAD,
-                            end_token=self.EOS)
-
-                with tf.variable_scope("embedding"):
-                    self.train_inputs_embedded = tf.nn.embedding_lookup(
-                        self.embedding_matrix, self.train_inputs)
-
-                forward_cell = self.cell[0] if isinstance(self.cell, tuple) else self.cell
-                batch_size, _ = tf.unstack(tf.shape(self.inputs))
-
-                with tf.variable_scope("Decoder"):
-                    ((self.train_outputs, self.train_sampled_ids),
-                     self.train_state, self.train_lengths) = dynamic_rnn_decode(
-                        mode=self.mode,
-                        decode_mode="greedy",
-                        cell=forward_cell,
-                        initial_state=forward_cell.zero_state(
-                            batch_size=batch_size,
-                            dtype=tf.float32),
-                        embeddings=self.embedding_matrix,
-                        output_layer=self.output_layer,
-                        inputs=self.train_inputs_embedded,
-                        inputs_length=self.train_length)
-                    self.train_logits = self.train_outputs
-
-    def _build_loss(self):
-        if self.lm_regularization:
-            self.unreg_loss = self.loss = seq2seq.sequence_loss(
-                logits=self.train_logits, targets=self.train_targets,
-                weights=self.loss_weights)
-        else:
-            self.unreg_loss = self.loss = 0.0
